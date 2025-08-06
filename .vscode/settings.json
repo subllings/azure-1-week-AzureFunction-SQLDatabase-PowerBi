@@ -1,0 +1,15 @@
+{
+  "azureFunctions.projectSubpath": "azure_function",
+  "azureFunctions.deploySubpath": "azure_function",
+  "azureFunctions.scmDoBuildDuringDeployment": true,
+  "azureFunctions.pythonVenv": ".venv",
+  "azureFunctions.projectLanguage": "Python",
+  "azureFunctions.projectRuntime": "~4",
+  "debug.internalConsoleOptions": "neverOpen",
+  "azureFunctions.projectLanguageModel": 2,
+  "git.confirmSync": false,
+  "git.autofetch": false,
+  "git.showPushSuccessNotification": false,
+  "git.enableSmartCommit": false,
+  "git.postCommitCommand": "none"
+}

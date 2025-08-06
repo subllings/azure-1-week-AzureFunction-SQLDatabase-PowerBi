@@ -1,0 +1,221 @@
+name: Azure Function CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'azure_function/**'
+      - 'Dockerfile.v2'
+      - 'scripts/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'azure_function/**'
+      - 'Dockerfile.v2'
+      - 'scripts/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - staging
+        - prod
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '18'
+
+jobs:
+  # Lint and Test Job
+  test:
+    name: 🧪 Test & Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Setup Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: 📦 Cache Python Dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: 📋 Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r azure_function/requirements.txt
+        pip install pytest flake8 black isort
+        
+    - name: 🎨 Code Formatting Check
+      run: |
+        black --check azure_function/
+        isort --check-only azure_function/
+        
+    - name: 🔍 Lint Code
+      run: |
+        flake8 azure_function/ --max-line-length=88 --ignore=E203,W503
+        
+    - name: 🧪 Run Unit Tests
+      run: |
+        cd azure_function
+        python -m pytest ../tests/ -v --tb=short
+        
+    - name: 📊 Upload Test Results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results
+        path: test-results.xml
+
+  # Security Scan Job
+  security:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: 🔒 Run Security Scan
+      uses: securecodewarrior/github-action-add-sarif@v1
+      with:
+        sarif-file: 'security-scan.sarif'
+        
+    - name: 📦 Dependency Security Check
+      run: |
+        python -m pip install safety
+        safety check -r azure_function/requirements.txt
+
+  # Build and Deploy Job
+  deploy:
+    name: 🚀 Build & Deploy
+    needs: [test, security]
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        environment: 
+          - ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+          
+    environment: ${{ matrix.environment }}
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Setup Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: 🔧 Setup Azure CLI
+      uses: azure/setup-azure-cli@v1
+      with:
+        version: latest
+        
+    - name: 🐳 Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: 🔑 Azure Login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+        
+    - name: 📋 Create Environment File
+      run: |
+        cat > .env << EOF
+        # Azure SQL Database
+        SQL_SERVER=${{ secrets.SQL_SERVER }}
+        SQL_DATABASE=${{ secrets.SQL_DATABASE }}
+        SQL_USERNAME=${{ secrets.SQL_USERNAME }}
+        SQL_PASSWORD=${{ secrets.SQL_PASSWORD }}
+        
+        # Application Insights
+        APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPLICATIONINSIGHTS_CONNECTION_STRING }}
+        
+        # Environment
+        ENVIRONMENT=${{ matrix.environment }}
+        EOF
+        
+    - name: 🚀 Deploy to Azure
+      env:
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        GITHUB_ACTIONS: true
+      run: |
+        chmod +x scripts/deploy-ci-cd.sh
+        ./scripts/deploy-ci-cd.sh ${{ matrix.environment }}
+        
+    - name: 🧪 Post-Deployment Testing
+      run: |
+        # Wait for deployment to complete
+        sleep 60
+        
+        # Get function app URL from deployment script output
+        FUNCTION_URL="${{ steps.deploy.outputs.FUNCTION_APP_URL }}"
+        
+        # Health check
+        echo "Testing health endpoint..."
+        curl -f "${FUNCTION_URL}/api/health" || exit 1
+        
+        # Test main endpoints
+        echo "Testing liveboard endpoint..."
+        curl -f "${FUNCTION_URL}/api/liveboard?station=Gent-Sint-Pieters" || exit 1
+        
+        echo "✅ All post-deployment tests passed!"
+        
+    - name: 📊 Deployment Summary
+      run: |
+        echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment**: ${{ matrix.environment }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Function App**: ${{ steps.deploy.outputs.FUNCTION_APP_URL }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Docker Image**: ${{ steps.deploy.outputs.DEPLOYMENT_IMAGE }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Deployment Time**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+        
+    - name: 🔔 Notify Teams on Failure
+      if: failure()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Performance Testing (only for prod)
+  performance-test:
+    name: ⚡ Performance Test
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: ⚡ Load Testing
+      run: |
+        # Install artillery for load testing
+        npm install -g artillery
+        
+        # Run load test
+        artillery run tests/performance/load-test.yml
+        
+    - name: 📊 Upload Performance Results
+      uses: actions/upload-artifact@v3
+      with:
+        name: performance-results
+        path: performance-results.json

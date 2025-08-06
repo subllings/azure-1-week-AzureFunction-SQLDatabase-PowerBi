@@ -1,0 +1,30 @@
+# Azure Functions Core Dependencies
+azure-functions>=1.11.0
+
+# HTTP requests for iRail API
+requests>=2.28.0
+
+# Database connectivity (Python 3.12 compatible - WHEEL AVAILABLE)
+pyodbc>=5.0.0
+# Note: pyodbc 5.x has stable pre-compiled wheels for Python 3.12
+
+# Azure SDKs
+azure-identity>=1.12.0
+azure-keyvault-secrets>=4.7.0
+
+# Application Insights & Monitoring (OpenCensus)
+opencensus-ext-azure>=1.1.13
+opencensus-ext-requests>=0.8.0
+opencensus-ext-logging>=0.1.1
+
+# Data processing
+pandas>=1.5.0
+python-dateutil>=2.8.0
+
+# Local development support
+python-dotenv>=1.0.0
+
+# Optional pure-Python SQL Server client (no ODBC required)
+# python-tds==1.13.2
+# Note: Uncomment only if ODBC drivers become problematic
+# pyodbc with msodbcsql18 is the recommended production solution

@@ -1,0 +1,47 @@
+name: Simple Deploy to Azure
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  AZURE_FUNCTIONAPP_NAME: 'traindata-function-app'
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: './azure_function'
+  PYTHON_VERSION: '3.10'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy Function App
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/requirements.txt
+        
+    - name: Create deployment package
+      run: |
+        cd ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+        zip -r ../function-app-package.zip . -x "*.pyc" "__pycache__/*" "tests/*" "*.git*"
+        
+    - name: Deploy to Azure Function App
+      uses: Azure/functions-action@v1
+      with:
+        app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
+        package: function-app-package.zip
+        publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
+        
+    - name: Test deployment
+      run: |
+        sleep 30
+        curl -f https://${{ env.AZURE_FUNCTIONAPP_NAME }}.azurewebsites.net/api/health

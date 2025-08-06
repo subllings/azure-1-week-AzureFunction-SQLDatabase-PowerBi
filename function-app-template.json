@@ -1,0 +1,82 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "functionAppName": {
+      "type": "string",
+      "defaultValue": "irail-functions-france-app"
+    },
+    "storageAccountName": {
+      "type": "string",
+      "defaultValue": "irailstorage5678"
+    },
+    "appServicePlanName": {
+      "type": "string",
+      "defaultValue": "irail-premium-plan"
+    },
+    "containerRegistryName": {
+      "type": "string",
+      "defaultValue": "irailfunctionsacr1754427881"
+    },
+    "dockerImageName": {
+      "type": "string",
+      "defaultValue": "irail-functions:latest"
+    }
+  },
+  "variables": {
+    "containerRegistryUrl": "[concat(parameters('containerRegistryName'), '.azurecr.io')]",
+    "fullImageName": "[concat(variables('containerRegistryUrl'), '/', parameters('dockerImageName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2021-02-01",
+      "name": "[parameters('functionAppName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "functionapp,linux,container",
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+        "siteConfig": {
+          "linuxFxVersion": "[concat('DOCKER|', variables('fullImageName'))]",
+          "appSettings": [
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2021-04-01').keys[0].value, ';EndpointSuffix=core.windows.net')]"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~4"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "python"
+            },
+            {
+              "name": "WEBSITES_ENABLE_APP_SERVICE_STORAGE",
+              "value": "false"
+            },
+            {
+              "name": "DOCKER_REGISTRY_SERVER_URL",
+              "value": "[concat('https://', variables('containerRegistryUrl'))]"
+            },
+            {
+              "name": "DOCKER_REGISTRY_SERVER_USERNAME",
+              "value": "[parameters('containerRegistryName')]"
+            },
+            {
+              "name": "DOCKER_REGISTRY_SERVER_PASSWORD",
+              "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', parameters('containerRegistryName')), '2021-09-01').passwords[0].value]"
+            }
+          ]
+        },
+        "reserved": true
+      }
+    }
+  ],
+  "outputs": {
+    "functionAppUrl": {
+      "type": "string",
+      "value": "[concat('https://', parameters('functionAppName'), '.azurewebsites.net')]"
+    }
+  }
+}

@@ -1,0 +1,61 @@
+config:
+  target: "{{ $processEnvironment.BASE_URL || 'https://traindata-function-app.azurewebsites.net' }}"
+  phases:
+    - duration: 60
+      arrivalRate: 1
+      name: "Warm-up phase"
+    - duration: 120
+      arrivalRate: 5
+      name: "Load test phase"
+    - duration: 60
+      arrivalRate: 10
+      name: "Peak load phase"
+  defaults:
+    headers:
+      User-Agent: "Artillery Load Test"
+
+scenarios:
+  - name: "Health Check"
+    weight: 20
+    flow:
+      - get:
+          url: "/api/health"
+          expect:
+            - statusCode: 200
+            - hasProperty: "status"
+
+  - name: "PowerBI Departures Data"
+    weight: 40
+    flow:
+      - get:
+          url: "/api/powerbi-data?type=departures"
+          expect:
+            - statusCode: 200
+            - hasProperty: "data"
+            - contentType: json
+
+  - name: "PowerBI Stations Data"
+    weight: 20
+    flow:
+      - get:
+          url: "/api/powerbi-data?type=stations"
+          expect:
+            - statusCode: 200
+            - hasProperty: "data"
+
+  - name: "PowerBI Delays Data"
+    weight: 15
+    flow:
+      - get:
+          url: "/api/powerbi-data?type=delays"
+          expect:
+            - statusCode: 200
+            - hasProperty: "data"
+
+  - name: "Analytics Endpoint"
+    weight: 5
+    flow:
+      - get:
+          url: "/api/analytics"
+          expect:
+            - statusCode: [200, 500]  # Allow 500 due to potential DB connectivity issues

@@ -1,0 +1,376 @@
+name: Azure Train Data CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  AZURE_FUNCTIONAPP_NAME: 'traindata-function-app'
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: './azure_function'
+  PYTHON_VERSION: '3.10'
+
+jobs:
+  # Job 1: Code Quality and Testing
+  code-quality:
+    runs-on: ubuntu-latest
+    name: Code Quality & Testing
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r azure_function/requirements.txt
+        pip install pytest flake8 black isort bandit safety
+        
+    - name: Code formatting check (Black)
+      run: |
+        black --check azure_function/ --diff
+        
+    - name: Import sorting check (isort)
+      run: |
+        isort azure_function/ --check-only --diff
+        
+    - name: Linting (Flake8)
+      run: |
+        flake8 azure_function/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 azure_function/ --count --max-complexity=10 --max-line-length=88 --statistics
+        
+    - name: Security scan (Bandit)
+      run: |
+        bandit -r azure_function/ -f json -o bandit-report.json
+        
+    - name: Dependency vulnerability scan (Safety)
+      run: |
+        safety check --json --output safety-report.json
+        
+    - name: Run unit tests
+      run: |
+        pytest tests/ --verbose --cov=azure_function --cov-report=xml --cov-report=html
+        
+    - name: Upload test coverage
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        
+    - name: Upload security scan results
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-reports
+        path: |
+          bandit-report.json
+          safety-report.json
+          
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results
+        path: htmlcov/
+
+  # Job 2: Infrastructure Deployment
+  infrastructure:
+    runs-on: ubuntu-latest
+    needs: code-quality
+    if: github.ref == 'refs/heads/main'
+    name: Deploy Infrastructure
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Azure CLI Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+        
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.5.0
+        
+    - name: Terraform Init
+      working-directory: ./infrastructure
+      run: terraform init
+      
+    - name: Terraform Plan
+      working-directory: ./infrastructure
+      run: |
+        terraform plan -out=tfplan \
+          -var="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+          -var="location=francecentral" \
+          -var="environment=prod"
+          
+    - name: Upload Terraform Plan
+      uses: actions/upload-artifact@v3
+      with:
+        name: terraform-plan
+        path: infrastructure/tfplan
+        
+    - name: Terraform Apply
+      working-directory: ./infrastructure
+      run: terraform apply tfplan
+      
+    - name: Get Infrastructure Outputs
+      working-directory: ./infrastructure
+      run: |
+        echo "FUNCTION_APP_NAME=$(terraform output -raw function_app_name)" >> $GITHUB_ENV
+        echo "SQL_SERVER_NAME=$(terraform output -raw sql_server_name)" >> $GITHUB_ENV
+        echo "STORAGE_ACCOUNT_NAME=$(terraform output -raw storage_account_name)" >> $GITHUB_ENV
+
+  # Job 3: Build and Package Function App
+  build:
+    runs-on: ubuntu-latest
+    needs: code-quality
+    name: Build Function App
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Create and start virtual environment
+      run: |
+        python -m venv venv
+        source venv/bin/activate
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/requirements.txt
+        
+    - name: Create deployment package
+      run: |
+        cd ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+        zip -r ../function-app-package.zip . -x "*.pyc" "__pycache__/*" "tests/*" "*.git*"
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: function-app-package
+        path: function-app-package.zip
+
+  # Job 4: Deploy to Staging
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: [infrastructure, build]
+    if: github.ref == 'refs/heads/develop'
+    name: Deploy to Staging
+    environment:
+      name: staging
+      url: https://${{ env.AZURE_FUNCTIONAPP_NAME }}-staging.azurewebsites.net
+      
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: function-app-package
+        
+    - name: Azure CLI Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+        
+    - name: Deploy to Azure Function App (Staging)
+      uses: Azure/functions-action@v1
+      with:
+        app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}-staging
+        package: function-app-package.zip
+        publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE_STAGING }}
+        
+    - name: Configure Application Settings (Staging)
+      run: |
+        az functionapp config appsettings set \
+          --name ${{ env.AZURE_FUNCTIONAPP_NAME }}-staging \
+          --resource-group traindata-app-rg-staging \
+          --settings \
+            "SQL_CONNECTION_STRING=${{ secrets.SQL_CONNECTION_STRING_STAGING }}" \
+            "IRAIL_API_BASE_URL=https://api.irail.be" \
+            "USER_AGENT=BeCodeTrainApp/1.0-staging" \
+            "ENVIRONMENT=staging"
+            
+    - name: Run smoke tests on staging
+      run: |
+        # Wait for deployment to complete
+        sleep 30
+        
+        # Test health endpoint
+        curl -f https://${{ env.AZURE_FUNCTIONAPP_NAME }}-staging.azurewebsites.net/api/health
+        
+        # Test PowerBI data endpoint
+        curl -f "https://${{ env.AZURE_FUNCTIONAPP_NAME }}-staging.azurewebsites.net/api/powerbi-data?type=departures"
+
+  # Job 5: Deploy to Production
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: [infrastructure, build]
+    if: github.ref == 'refs/heads/main'
+    name: Deploy to Production
+    environment:
+      name: production
+      url: https://${{ env.AZURE_FUNCTIONAPP_NAME }}.azurewebsites.net
+      
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: function-app-package
+        
+    - name: Azure CLI Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+        
+    - name: Deploy to Azure Function App (Production)
+      uses: Azure/functions-action@v1
+      with:
+        app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
+        package: function-app-package.zip
+        publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
+        
+    - name: Configure Application Settings (Production)
+      run: |
+        az functionapp config appsettings set \
+          --name ${{ env.AZURE_FUNCTIONAPP_NAME }} \
+          --resource-group traindata-app-rg \
+          --settings \
+            "SQL_CONNECTION_STRING=${{ secrets.SQL_CONNECTION_STRING }}" \
+            "IRAIL_API_BASE_URL=https://api.irail.be" \
+            "USER_AGENT=BeCodeTrainApp/1.0" \
+            "ENVIRONMENT=production"
+            
+    - name: Run smoke tests on production
+      run: |
+        # Wait for deployment to complete
+        sleep 30
+        
+        # Test health endpoint
+        curl -f https://${{ env.AZURE_FUNCTIONAPP_NAME }}.azurewebsites.net/api/health
+        
+        # Test PowerBI data endpoint
+        curl -f "https://${{ env.AZURE_FUNCTIONAPP_NAME }}.azurewebsites.net/api/powerbi-data?type=departures"
+        
+    - name: Create GitHub Release
+      if: github.ref == 'refs/heads/main'
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ github.run_number }}
+        release_name: Release v${{ github.run_number }}
+        body: |
+          Automated release from CI/CD pipeline
+          
+          Changes:
+          ${{ github.event.head_commit.message }}
+          
+          Deployed to: https://${{ env.AZURE_FUNCTIONAPP_NAME }}.azurewebsites.net
+        draft: false
+        prerelease: false
+
+  # Job 6: Performance Testing
+  performance-test:
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    if: github.ref == 'refs/heads/main'
+    name: Performance Testing
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install artillery
+      run: npm install -g artillery
+      
+    - name: Run performance tests
+      run: |
+        artillery run tests/performance/load-test.yml --output performance-report.json
+        
+    - name: Upload performance report
+      uses: actions/upload-artifact@v3
+      with:
+        name: performance-report
+        path: performance-report.json
+
+  # Job 7: Security Scan
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    if: github.ref == 'refs/heads/main'
+    name: Security Scanning
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # Job 8: Notification
+  notification:
+    runs-on: ubuntu-latest
+    needs: [deploy-production, performance-test, security-scan]
+    if: always()
+    name: Send Notifications
+    
+    steps:
+    - name: Send Teams notification on success
+      if: success()
+      uses: aliencube/microsoft-teams-actions@v0.8.0
+      with:
+        webhook_uri: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        title: "✅ Azure Train Data Deployment Successful"
+        summary: "Production deployment completed successfully"
+        text: |
+          **Deployment Status:** Success ✅
+          **Environment:** Production
+          **Commit:** ${{ github.sha }}
+          **Author:** ${{ github.actor }}
+          **URL:** https://${{ env.AZURE_FUNCTIONAPP_NAME }}.azurewebsites.net
+          
+    - name: Send Teams notification on failure
+      if: failure()
+      uses: aliencube/microsoft-teams-actions@v0.8.0
+      with:
+        webhook_uri: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        title: "❌ Azure Train Data Deployment Failed"
+        summary: "Production deployment failed"
+        text: |
+          **Deployment Status:** Failed ❌
+          **Environment:** Production
+          **Commit:** ${{ github.sha }}
+          **Author:** ${{ github.actor }}
+          **Logs:** https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}

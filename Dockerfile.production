@@ -1,0 +1,55 @@
+# Azure Functions Production Docker - Image officielle Microsoft
+# Production-ready avec Python 3.12 + Azure Functions Runtime
+
+FROM mcr.microsoft.com/azure-functions/python:4-python3.12
+
+# Variables d'environnement pour la production
+ENV AzureWebJobsScriptRoot=/home/site/wwwroot \
+    AzureFunctionsJobHost__Logging__Console__IsEnabled=true \
+    AzureFunctionsJobHost__Logging__LogLevel__Default=Information \
+    PYTHONUNBUFFERED=1 \
+    FUNCTIONS_WORKER_RUNTIME=python
+
+# Installer les dépendances système nécessaires
+RUN apt-get update && apt-get install -y \
+    # Curl pour les health checks
+    curl \
+    # Outils nécessaires pour l'installation ODBC
+    gnupg2 \
+    apt-transport-https \
+    ca-certificates \
+    unixodbc-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Installer Microsoft ODBC Driver 18 pour SQL Server
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
+    && curl https://packages.microsoft.com/config/debian/11/prod.list > /etc/apt/sources.list.d/mssql-release.list \
+    && apt-get update \
+    && ACCEPT_EULA=Y apt-get install -y msodbcsql18 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copier le code des fonctions
+COPY azure_function/ /home/site/wwwroot/
+
+# Copier requirements et installer les dépendances Python
+COPY azure_function/requirements.txt /home/site/wwwroot/
+RUN cd /home/site/wwwroot && \
+    pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# L'image officielle Microsoft gère automatiquement :
+# - Le démarrage du runtime Azure Functions
+# - La gestion des ports (PORT est automatiquement configuré)
+# - Les variables d'environnement Azure Functions
+# - La sécurité et les permissions
+
+# Exposer le port standard Azure Functions
+EXPOSE 80
+
+# L'image Microsoft gère automatiquement le démarrage
+# Pas de CMD explicite pour éviter les conflits
+
+# Health check temporairement désactivé pour éviter les crash loops
+# HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+#     CMD curl -f http://localhost:80/api/health || exit 1

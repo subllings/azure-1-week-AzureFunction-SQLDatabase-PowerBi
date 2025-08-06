@@ -1,0 +1,191 @@
+{
+  "version": "1.0",
+  "name": "Belgian Train Data Dashboard",
+  "description": "Power BI template for visualizing Belgian train data from iRail API",
+  "author": "BeCode Azure Train Data Project",
+  "dataModelSchema": [
+    {
+      "name": "TrainDepartures",
+      "description": "Real-time train departure data",
+      "fields": [
+        {"name": "station_name", "type": "Text", "description": "Name of the station"},
+        {"name": "vehicle_name", "type": "Text", "description": "Train identifier (e.g., IC 1234)"},
+        {"name": "platform", "type": "Text", "description": "Platform number"},
+        {"name": "scheduled_time", "type": "DateTime", "description": "Scheduled departure time"},
+        {"name": "actual_time", "type": "DateTime", "description": "Actual departure time"},
+        {"name": "delay_seconds", "type": "Number", "description": "Delay in seconds"},
+        {"name": "is_canceled", "type": "Boolean", "description": "Whether the train is canceled"},
+        {"name": "occupancy_level", "type": "Text", "description": "Train occupancy (low/medium/high)"},
+        {"name": "recorded_at", "type": "DateTime", "description": "When this data was recorded"}
+      ]
+    },
+    {
+      "name": "TrainStations",
+      "description": "Belgian railway stations master data",
+      "fields": [
+        {"name": "name", "type": "Text", "description": "Station name"},
+        {"name": "standardname", "type": "Text", "description": "Standard station name"},
+        {"name": "locationX", "type": "Number", "description": "Longitude coordinate"},
+        {"name": "locationY", "type": "Number", "description": "Latitude coordinate"}
+      ]
+    },
+    {
+      "name": "DelayAnalytics",
+      "description": "Aggregated delay statistics by station and date",
+      "fields": [
+        {"name": "station_name", "type": "Text", "description": "Station name"},
+        {"name": "avg_delay", "type": "Number", "description": "Average delay in seconds"},
+        {"name": "departure_count", "type": "Number", "description": "Number of departures"},
+        {"name": "date", "type": "Date", "description": "Date of the data"}
+      ]
+    }
+  ],
+  "dataSources": [
+    {
+      "name": "Azure Function - Departures",
+      "type": "Web",
+      "url": "https://traindata-function-app-hsefg2hkbbetgac2.francecentral-01.azurewebsites.net/api/powerbi-data?type=departures",
+      "refreshSchedule": "15 minutes"
+    },
+    {
+      "name": "Azure Function - Stations", 
+      "type": "Web",
+      "url": "https://traindata-function-app-hsefg2hkbbetgac2.francecentral-01.azurewebsites.net/api/powerbi-data?type=stations",
+      "refreshSchedule": "Daily"
+    },
+    {
+      "name": "Azure Function - Delays",
+      "type": "Web", 
+      "url": "https://traindata-function-app-hsefg2hkbbetgac2.francecentral-01.azurewebsites.net/api/powerbi-data?type=delays",
+      "refreshSchedule": "1 hour"
+    },
+    {
+      "name": "Azure Function - Analytics",
+      "type": "Web",
+      "url": "https://traindata-function-app-hsefg2hkbbetgac2.francecentral-01.azurewebsites.net/api/analytics", 
+      "refreshSchedule": "5 minutes"
+    }
+  ],
+  "relationships": [
+    {
+      "fromTable": "TrainDepartures",
+      "fromColumn": "station_name",
+      "toTable": "TrainStations", 
+      "toColumn": "name",
+      "cardinality": "ManyToOne"
+    },
+    {
+      "fromTable": "DelayAnalytics",
+      "fromColumn": "station_name", 
+      "toTable": "TrainStations",
+      "toColumn": "name",
+      "cardinality": "ManyToOne"
+    }
+  ],
+  "measures": [
+    {
+      "name": "Delay_Minutes",
+      "dax": "AVERAGE(TrainDepartures[delay_seconds]) / 60",
+      "description": "Average delay in minutes"
+    },
+    {
+      "name": "Cancellation_Rate",
+      "dax": "DIVIDE(COUNTROWS(FILTER(TrainDepartures, TrainDepartures[is_canceled] = TRUE)), COUNTROWS(TrainDepartures)) * 100",
+      "description": "Percentage of canceled trains"
+    },
+    {
+      "name": "OnTime_Performance", 
+      "dax": "DIVIDE(COUNTROWS(FILTER(TrainDepartures, TrainDepartures[delay_seconds] <= 300)), COUNTROWS(TrainDepartures)) * 100",
+      "description": "Percentage of trains on time (within 5 minutes)"
+    },
+    {
+      "name": "Total_Departures",
+      "dax": "COUNTROWS(TrainDepartures)",
+      "description": "Total number of departures"
+    },
+    {
+      "name": "Active_Stations",
+      "dax": "DISTINCTCOUNT(TrainDepartures[station_name])",
+      "description": "Number of active stations"
+    }
+  ],
+  "pages": [
+    {
+      "name": "Overview",
+      "description": "Real-time overview dashboard",
+      "visuals": [
+        {
+          "type": "Card",
+          "title": "Total Departures",
+          "measure": "Total_Departures"
+        },
+        {
+          "type": "Card", 
+          "title": "Avg Delay (min)",
+          "measure": "Delay_Minutes"
+        },
+        {
+          "type": "Card",
+          "title": "Cancellation Rate (%)",
+          "measure": "Cancellation_Rate"
+        },
+        {
+          "type": "Card",
+          "title": "Active Stations", 
+          "measure": "Active_Stations"
+        },
+        {
+          "type": "LineChart",
+          "title": "Delays Over Time",
+          "xAxis": "scheduled_time",
+          "yAxis": "delay_seconds",
+          "legend": "station_name"
+        },
+        {
+          "type": "BarChart",
+          "title": "Top Delayed Stations", 
+          "xAxis": "Delay_Minutes",
+          "yAxis": "station_name"
+        }
+      ]
+    },
+    {
+      "name": "Station Analysis",
+      "description": "Geographic and station-specific analysis",
+      "visuals": [
+        {
+          "type": "Map",
+          "title": "Station Performance Map",
+          "latitude": "locationY",
+          "longitude": "locationX", 
+          "size": "departure_count",
+          "tooltip": ["name", "avg_delay"]
+        },
+        {
+          "type": "Table",
+          "title": "Station Performance Table",
+          "columns": ["station_name", "Total_Departures", "Delay_Minutes", "Cancellation_Rate"]
+        }
+      ]
+    },
+    {
+      "name": "Time Analysis", 
+      "description": "Temporal patterns and trends",
+      "visuals": [
+        {
+          "type": "LineChart",
+          "title": "Daily Trends",
+          "xAxis": "date",
+          "yAxis": ["departure_count", "avg_delay"]
+        },
+        {
+          "type": "Heatmap",
+          "title": "Delays by Hour",
+          "xAxis": "Hour",
+          "yAxis": "DayOfWeek", 
+          "values": "avg_delay"
+        }
+      ]
+    }
+  ]
+}

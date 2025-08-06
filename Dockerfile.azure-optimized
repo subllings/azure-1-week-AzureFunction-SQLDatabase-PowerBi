@@ -1,0 +1,38 @@
+# Azure Functions Optimized - Fix permissions et configuration
+# Base image officielle Microsoft avec corrections de permissions
+
+FROM mcr.microsoft.com/azure-functions/python:4-python3.12
+
+# Variables d'environnement essentielles
+ENV AzureWebJobsScriptRoot=/home/site/wwwroot \
+    AzureFunctionsJobHost__Logging__Console__IsEnabled=true \
+    AzureFunctionsJobHost__Logging__LogLevel__Default=Information \
+    PYTHONUNBUFFERED=1 \
+    FUNCTIONS_WORKER_RUNTIME=python \
+    PYTHONPATH=/home/site/wwwroot
+
+# Corriger les permissions et installer les dépendances système
+USER root
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /home/site/wwwroot \
+    && chmod -R 755 /home/site \
+    && chmod -R 777 /home/site/wwwroot
+
+# Copier le code et définir les permissions
+COPY azure_function/ /home/site/wwwroot/
+RUN chmod -R 755 /home/site/wwwroot
+
+# Installer les dépendances Python
+COPY azure_function/requirements.txt /home/site/wwwroot/
+RUN cd /home/site/wwwroot && \
+    pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Définir le bon utilisateur pour Azure Functions
+USER 1001
+
+# Health check simple
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost/api/health || exit 1

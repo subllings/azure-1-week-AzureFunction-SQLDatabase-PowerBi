@@ -1,0 +1,357 @@
+{
+  "version": "1.0",
+  "report_templates": {
+    "executive_dashboard": {
+      "name": "Belgian Train Network - Executive Dashboard",
+      "description": "High-level overview for management with KPIs, geographic performance, and trend analysis",
+      "pages": [
+        {
+          "name": "Executive Overview",
+          "layout": "desktop",
+          "visuals": [
+            {
+              "type": "card",
+              "title": "Total Daily Departures",
+              "measure": "COUNT(departures[vehicle_name])",
+              "position": {"x": 0, "y": 0, "width": 250, "height": 150},
+              "formatting": {
+                "font_size": "24px",
+                "color": "#1f77b4",
+                "background": "#f8f9fa"
+              }
+            },
+            {
+              "type": "card", 
+              "title": "Average Delay (Minutes)",
+              "measure": "DIVIDE(AVERAGE(departures[delay_seconds]), 60, 0)",
+              "position": {"x": 260, "y": 0, "width": 250, "height": 150},
+              "formatting": {
+                "font_size": "24px",
+                "color": "#ff7f0e",
+                "conditional_formatting": {
+                  "green": "< 2",
+                  "yellow": "2-5", 
+                  "red": "> 5"
+                }
+              }
+            },
+            {
+              "type": "card",
+              "title": "On-Time Performance %",
+              "measure": "DIVIDE(COUNTROWS(FILTER(departures, departures[delay_seconds] <= 300)), COUNTROWS(departures)) * 100",
+              "position": {"x": 520, "y": 0, "width": 250, "height": 150},
+              "formatting": {
+                "font_size": "24px",
+                "color": "#2ca02c",
+                "suffix": "%"
+              }
+            },
+            {
+              "type": "card",
+              "title": "Cancellation Rate %", 
+              "measure": "DIVIDE(COUNTROWS(FILTER(departures, departures[is_canceled] = TRUE)), COUNTROWS(departures)) * 100",
+              "position": {"x": 780, "y": 0, "width": 250, "height": 150},
+              "formatting": {
+                "font_size": "24px",
+                "color": "#d62728",
+                "suffix": "%"
+              }
+            },
+            {
+              "type": "map",
+              "title": "Station Performance Across Belgium",
+              "data_source": "stations",
+              "latitude": "locationY",
+              "longitude": "locationX", 
+              "size": "COUNT(departures[vehicle_name])",
+              "color": "AVERAGE(departures[delay_seconds])",
+              "position": {"x": 0, "y": 170, "width": 650, "height": 400},
+              "formatting": {
+                "color_scale": {
+                  "min": "#2ca02c",
+                  "mid": "#ff7f0e", 
+                  "max": "#d62728"
+                },
+                "bubble_size": {"min": 5, "max": 30}
+              }
+            },
+            {
+              "type": "line_chart",
+              "title": "Hourly Delay Trends",
+              "x_axis": "HOUR(departures[scheduled_time])",
+              "y_axis": "AVERAGE(departures[delay_seconds])/60",
+              "legend": "departures[station_name]",
+              "position": {"x": 670, "y": 170, "width": 360, "height": 200},
+              "formatting": {
+                "x_axis_title": "Hour of Day",
+                "y_axis_title": "Average Delay (Minutes)",
+                "show_data_labels": false
+              }
+            },
+            {
+              "type": "table",
+              "title": "Top 10 Busiest Stations",
+              "columns": [
+                "departures[station_name]",
+                "COUNT(departures[vehicle_name])",
+                "AVERAGE(departures[delay_seconds])/60",
+                "DIVIDE(COUNTROWS(FILTER(departures, departures[delay_seconds] <= 300)), COUNTROWS(departures)) * 100"
+              ],
+              "column_headers": ["Station", "Daily Departures", "Avg Delay (Min)", "On-Time %"],
+              "position": {"x": 670, "y": 390, "width": 360, "height": 180},
+              "formatting": {
+                "conditional_formatting": {
+                  "on_time_percentage": {
+                    "green": "> 85",
+                    "yellow": "75-85",
+                    "red": "< 75"
+                  }
+                }
+              }
+            }
+          ],
+          "filters": [
+            {
+              "type": "date_range",
+              "field": "departures[scheduled_time]",
+              "default": "Last 7 days",
+              "position": {"x": 0, "y": 590, "width": 200, "height": 50}
+            },
+            {
+              "type": "dropdown",
+              "field": "departures[station_name]",
+              "multi_select": true,
+              "position": {"x": 220, "y": 590, "width": 200, "height": 50}
+            }
+          ]
+        }
+      ]
+    },
+    "operations_dashboard": {
+      "name": "Belgian Train Network - Operations Monitor",
+      "description": "Real-time operational monitoring for railway operations teams",
+      "pages": [
+        {
+          "name": "Live Operations",
+          "layout": "desktop",
+          "visuals": [
+            {
+              "type": "table",
+              "title": "Live Departure Board",
+              "columns": [
+                "departures[station_name]",
+                "departures[vehicle_name]", 
+                "departures[platform]",
+                "FORMAT(departures[scheduled_time], 'HH:mm')",
+                "FORMAT(departures[actual_time], 'HH:mm')",
+                "departures[delay_seconds]/60",
+                "IF(departures[is_canceled], 'CANCELLED', IF(departures[delay_seconds] > 300, 'DELAYED', 'ON TIME'))"
+              ],
+              "column_headers": ["Station", "Train", "Platform", "Scheduled", "Actual", "Delay (Min)", "Status"],
+              "position": {"x": 0, "y": 0, "width": 1030, "height": 250},
+              "formatting": {
+                "conditional_formatting": {
+                  "status": {
+                    "cancelled": "#d62728",
+                    "delayed": "#ff7f0e",
+                    "on_time": "#2ca02c"
+                  }
+                },
+                "sort": "departures[scheduled_time] DESC"
+              },
+              "filters": {
+                "time_range": "DATEDIFF(HOUR, departures[scheduled_time], NOW()) <= 4"
+              }
+            },
+            {
+              "type": "matrix",
+              "title": "Delay Heatmap by Hour and Station",
+              "rows": "departures[station_name]",
+              "columns": "HOUR(departures[scheduled_time])",
+              "values": "AVERAGE(departures[delay_seconds])/60",
+              "position": {"x": 0, "y": 270, "width": 650, "height": 300},
+              "formatting": {
+                "color_scale": {
+                  "min": "#2ca02c",
+                  "mid": "#ffff99",
+                  "max": "#d62728"
+                },
+                "show_values": true
+              }
+            },
+            {
+              "type": "clustered_bar_chart",
+              "title": "Platform Utilization",
+              "y_axis": "departures[platform]",
+              "x_axis": "COUNT(departures[vehicle_name])",
+              "legend": "departures[station_name]",
+              "position": {"x": 670, "y": 270, "width": 360, "height": 150},
+              "formatting": {
+                "data_labels": true,
+                "legend_position": "right"
+              }
+            },
+            {
+              "type": "donut_chart",
+              "title": "Current Train Occupancy",
+              "values": "COUNT(departures[vehicle_name])",
+              "legend": "departures[occupancy_level]",
+              "position": {"x": 670, "y": 440, "width": 360, "height": 130},
+              "formatting": {
+                "colors": {
+                  "low": "#2ca02c",
+                  "medium": "#ff7f0e", 
+                  "high": "#d62728"
+                },
+                "show_percentages": true
+              }
+            }
+          ],
+          "auto_refresh": {
+            "enabled": true,
+            "interval_minutes": 5
+          }
+        }
+      ]
+    },
+    "geographic_analysis": {
+      "name": "Belgian Train Network - Geographic Performance",
+      "description": "Regional analysis and geographic performance visualization",
+      "pages": [
+        {
+          "name": "Network Geography",
+          "layout": "desktop",
+          "visuals": [
+            {
+              "type": "map",
+              "title": "Belgian Railway Network Performance Map",
+              "data_source": "stations",
+              "latitude": "locationY",
+              "longitude": "locationX",
+              "size": "COUNT(departures[vehicle_name])",
+              "color": "AVERAGE(departures[delay_seconds])",
+              "position": {"x": 0, "y": 0, "width": 1030, "height": 500},
+              "formatting": {
+                "map_style": "road",
+                "zoom_level": 7,
+                "center": {"lat": 50.8503, "lng": 4.3517},
+                "tooltips": [
+                  "stations[name]",
+                  "COUNT(departures[vehicle_name])",
+                  "AVERAGE(departures[delay_seconds])/60",
+                  "DIVIDE(COUNTROWS(FILTER(departures, departures[delay_seconds] <= 300)), COUNTROWS(departures)) * 100"
+                ]
+              }
+            },
+            {
+              "type": "clustered_column_chart",
+              "title": "Regional Performance Comparison",
+              "x_axis": "SWITCH(TRUE(), SEARCH('Brussels', departures[station_name]) > 0, 'Brussels Region', SEARCH('Antwerp', departures[station_name]) > 0, 'Antwerp Region', SEARCH('Gent', departures[station_name]) > 0, 'Ghent Region', 'Other Regions')",
+              "y_axis": ["AVERAGE(departures[delay_seconds])/60", "DIVIDE(COUNTROWS(FILTER(departures, departures[is_canceled] = TRUE)), COUNTROWS(departures)) * 100"],
+              "position": {"x": 0, "y": 520, "width": 515, "height": 200},
+              "formatting": {
+                "y_axis_title": "Performance Metrics",
+                "legend": ["Avg Delay (Min)", "Cancellation Rate (%)"]
+              }
+            },
+            {
+              "type": "table",
+              "title": "Station Performance Rankings", 
+              "columns": [
+                "departures[station_name]",
+                "COUNT(departures[vehicle_name])",
+                "AVERAGE(departures[delay_seconds])/60",
+                "DIVIDE(COUNTROWS(FILTER(departures, departures[delay_seconds] <= 300)), COUNTROWS(departures)) * 100",
+                "SWITCH(TRUE(), DIVIDE(COUNTROWS(FILTER(departures, departures[delay_seconds] <= 300)), COUNTROWS(departures)) >= 0.9, 'Excellent', DIVIDE(COUNTROWS(FILTER(departures, departures[delay_seconds] <= 300)), COUNTROWS(departures)) >= 0.8, 'Good', 'Needs Improvement')"
+              ],
+              "column_headers": ["Station", "Departures", "Avg Delay", "On-Time %", "Rating"],
+              "position": {"x": 535, "y": 520, "width": 495, "height": 200},
+              "formatting": {
+                "sort": "On-Time % DESC",
+                "conditional_formatting": {
+                  "rating": {
+                    "excellent": "#2ca02c",
+                    "good": "#ff7f0e",
+                    "needs_improvement": "#d62728"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "dax_measures": {
+    "performance_metrics": [
+      {
+        "name": "On_Time_Percentage",
+        "formula": "DIVIDE(COUNTROWS(FILTER(departures, departures[delay_seconds] <= 300)), COUNTROWS(departures)) * 100",
+        "description": "Percentage of trains arriving within 5 minutes of schedule"
+      },
+      {
+        "name": "Average_Delay_Minutes", 
+        "formula": "DIVIDE(AVERAGE(departures[delay_seconds]), 60)",
+        "description": "Average delay in minutes across all departures"
+      },
+      {
+        "name": "Cancellation_Rate",
+        "formula": "DIVIDE(COUNTROWS(FILTER(departures, departures[is_canceled] = TRUE)), COUNTROWS(departures)) * 100",
+        "description": "Percentage of cancelled trains"
+      },
+      {
+        "name": "Peak_Hour_Performance",
+        "formula": "CALCULATE([On_Time_Percentage], FILTER(departures, HOUR(departures[scheduled_time]) >= 7 && HOUR(departures[scheduled_time]) <= 9 || HOUR(departures[scheduled_time]) >= 17 && HOUR(departures[scheduled_time]) <= 19))",
+        "description": "On-time performance during rush hours (7-9 AM, 5-7 PM)"
+      },
+      {
+        "name": "Station_Performance_Score",
+        "formula": "([On_Time_Percentage] * 0.6) + ((100 - MIN([Average_Delay_Minutes], 30) / 30 * 100) * 0.4)",
+        "description": "Composite performance score (0-100) weighting on-time % and delays"
+      }
+    ],
+    "time_intelligence": [
+      {
+        "name": "Yesterday_Departures",
+        "formula": "CALCULATE(COUNT(departures[vehicle_name]), DATEADD(departures[scheduled_time], -1, DAY))",
+        "description": "Number of departures from previous day"
+      },
+      {
+        "name": "Week_Over_Week_Change",
+        "formula": "DIVIDE([On_Time_Percentage] - CALCULATE([On_Time_Percentage], DATEADD(departures[scheduled_time], -7, DAY)), CALCULATE([On_Time_Percentage], DATEADD(departures[scheduled_time], -7, DAY)))",
+        "description": "Weekly change in on-time performance"
+      }
+    ]
+  },
+  "data_connections": {
+    "departures": {
+      "url": "https://traindata-function-app-hsefg2hkbbetgac2.francecentral-01.azurewebsites.net/api/powerbi-data?type=departures",
+      "refresh_frequency": "Every 15 minutes",
+      "data_type": "JSON"
+    },
+    "stations": {
+      "url": "https://traindata-function-app-hsefg2hkbbetgac2.francecentral-01.azurewebsites.net/api/powerbi-data?type=stations", 
+      "refresh_frequency": "Daily",
+      "data_type": "JSON"
+    },
+    "delays": {
+      "url": "https://traindata-function-app-hsefg2hkbbetgac2.francecentral-01.azurewebsites.net/api/powerbi-data?type=delays",
+      "refresh_frequency": "Hourly", 
+      "data_type": "JSON"
+    }
+  },
+  "deployment_settings": {
+    "power_bi_service": {
+      "workspace": "Belgian Train Analytics",
+      "app_name": "Train Network Performance",
+      "permissions": {
+        "viewers": ["Operations Team", "Management"],
+        "editors": ["Data Analytics Team"]
+      }
+    },
+    "mobile_layout": {
+      "enabled": true,
+      "optimized_visuals": ["KPI Cards", "Live Departures", "Performance Map"]
+    }
+  }
+}
