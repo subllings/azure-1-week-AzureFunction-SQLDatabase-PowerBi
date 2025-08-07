@@ -7,7 +7,11 @@ location    = "West Europe"
 
 # SQL Server configuration for production
 sql_admin_username = "sqladmin"
-# sql_admin_password will be provided via environment variable TF_VAR_sql_admin_password
+# sql_admin_password should be provided via:
+#   1. Environment variable: export TF_VAR_sql_admin_password="secure_password"
+#   2. Azure DevOps secret variable
+#   3. GitHub Actions secret
+# NEVER store production passwords in tfvars files!
 
 # Development access (disabled in production)
 developer_ip = ""

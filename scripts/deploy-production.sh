@@ -27,6 +27,16 @@ echo "Azure authentication OK"
 # Navigate to infrastructure directory
 cd infrastructure
 
+# Load production-specific environment variables
+if [ -f ".env.production" ]; then
+    echo "Loading production environment variables..."
+    source .env.production
+    echo "✓ Production environment variables loaded"
+else
+    echo "❌ .env.production file not found in infrastructure directory"
+    exit 1
+fi
+
 # Check if Terraform is installed
 if ! command -v terraform &> /dev/null; then
     echo "Terraform is not installed. Install it from: https://www.terraform.io/downloads.html"

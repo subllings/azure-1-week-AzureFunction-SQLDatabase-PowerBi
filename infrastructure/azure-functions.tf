@@ -1,4 +1,22 @@
-# =============================================================================
+# =================================================================    # Runtime configuration
+    "FUNCTIONS_WORKER_RUNTIME"            = "python"
+    "FUNCTIONS_EXTENSION_VERSION"          = "~4"
+    "AzureWebJobsFeatureFlags"            = "EnableWorkerIndexing"
+    "PYTHON_ENABLE_WORKER_EXTENSIONS"     = "1"
+    
+    # Performance and Cold Start Prevention
+    "WEBSITE_USE_PLACEHOLDER"             = "0"  # Disable placeholder to reduce cold starts
+    "WEBSITE_WARMUP_PATH"                 = "/api/warmup"  # Path to warmup function
+    "WEBSITE_PRELOAD_ENABLED"             = "1"  # Enable preload for faster cold starts
+    "WEBSITE_RUN_FROM_PACKAGE"            = "1"  # Run from package for better performance
+    "WEBSITE_HTTPSCALEV2_ENABLED"         = "1"  # Enable HTTP scaling v2
+    "WEBSITE_MAX_DYNAMIC_APPLICATION_SCALE_OUT" = "5"  # Reasonable limit for staging
+    
+    # Container settings (for container deployment)
+    "WEBSITES_ENABLE_APP_SERVICE_STORAGE" = "false"
+    "DOCKER_REGISTRY_SERVER_URL"          = "https://${azurerm_container_registry.main.login_server}"
+    "DOCKER_REGISTRY_SERVER_USERNAME"     = azurerm_container_registry.main.admin_username
+    "DOCKER_REGISTRY_SERVER_PASSWORD"     = azurerm_container_registry.main.admin_password=
 # Azure Functions App for iRail Train Data API
 # =============================================================================
 # This creates the Azure Functions App that will host all the iRail APIs
@@ -17,6 +35,21 @@ resource "azurerm_linux_function_app" "irail_functions" {
   
   # Link to App Service Plan
   service_plan_id = azurerm_service_plan.irail_functions_plan.id
+  
+  # Flex Consumption configuration
+  function_app_config {
+    deployment_settings {
+      maximum_instance_count = 100
+    }
+    runtime {
+      name    = "python"
+      version = "3.12"
+    }
+    scale_and_concurrency {
+      maximum_instance_count              = 100
+      instance_memory                     = 2048
+    }
+  }
   
   # Managed Identity configuration
   identity {

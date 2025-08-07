@@ -2,6 +2,9 @@
 
 # Deploy Staging Environment Only
 # Script to deploy only the staging environment
+# =============================================================================
+# chmod +x ./scripts/deploy-staging.sh
+# ./scripts/deploy-staging.sh
 
 set -e  # Exit on any error
 
@@ -27,30 +30,27 @@ echo "Azure authentication OK"
 # Navigate to infrastructure directory
 cd infrastructure
 
+# Load staging-specific environment variables
+if [ -f ".env.staging" ]; then
+    echo "Loading staging environment variables..."
+    source .env.staging
+    echo "✓ Staging environment variables loaded"
+else
+    echo "⚠️  .env.staging file not found in infrastructure directory"
+    echo "   Creating infrastructure/.env.staging with your configuration..."
+fi
+
 # Check if Terraform is installed
 if ! command -v terraform &> /dev/null; then
     echo "Terraform is not installed. Install it from: https://www.terraform.io/downloads.html"
+    echo "or choco install terraform"
     exit 1
 fi
 
 echo "Terraform found"
 
-# Prompt for SQL password if not set
-if [ -z "$TF_VAR_sql_admin_password" ]; then
-    echo "SQL Admin password required for staging:"
-    read -s -p "Enter SQL password (min 8 characters, with uppercase, lowercase, numbers): " SQL_PASSWORD
-    echo
-    export TF_VAR_sql_admin_password="$SQL_PASSWORD"
-fi
-
-# Optionally get developer IP for SQL access
-if [ -z "$TF_VAR_developer_ip" ]; then
-    echo "Do you want to allow your IP for direct SQL Server access?"
-    read -p "Enter your public IP (or press Enter to skip): " DEV_IP
-    if [ ! -z "$DEV_IP" ]; then
-        export TF_VAR_developer_ip="$DEV_IP"
-    fi
-fi
+# Note: SQL password is configured in staging.tfvars file or .env file
+echo "Using SQL password from configuration files"
 
 echo "Initializing Terraform..."
 terraform init

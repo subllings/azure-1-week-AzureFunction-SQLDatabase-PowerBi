@@ -13,9 +13,9 @@ resource "azurerm_service_plan" "irail_functions_plan" {
   os_type             = "Linux"
   
   # SKU based on environment
-  # FC1 = Flex Consumption (serverless) - for staging and development
+  # Y1 = Consumption (serverless) - for staging and development
   # EP1 = Elastic Premium - for production with better performance
-  sku_name = var.environment == "production" ? "EP1" : "FC1"
+  sku_name = var.environment == "production" ? "EP1" : "Y1"
   
   tags = merge(local.common_tags, {
     Component = "App Service Plan"

@@ -8,6 +8,49 @@ import random
 import time
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional
+import asyncio
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# Connection pooling for better performance
+class ConnectionPool:
+    def __init__(self):
+        self.pool = {}
+        self.last_used = {}
+        self.lock = threading.Lock()
+    
+    def get_session(self, timeout=30):
+        with self.lock:
+            session_id = threading.get_ident()
+            if session_id not in self.pool:
+                session = requests.Session()
+                session.timeout = timeout
+                # Keep connections alive
+                session.headers.update({
+                    'User-Agent': 'BeCodeTrainApp/1.0 (student.project@becode.education)',
+                    'Connection': 'keep-alive',
+                    'Cache-Control': 'no-cache'
+                })
+                self.pool[session_id] = session
+            
+            self.last_used[session_id] = time.time()
+            return self.pool[session_id]
+    
+    def cleanup_old_sessions(self, max_age=300):  # 5 minutes
+        with self.lock:
+            current_time = time.time()
+            expired_sessions = [
+                sid for sid, last_used in self.last_used.items()
+                if current_time - last_used > max_age
+            ]
+            for sid in expired_sessions:
+                if sid in self.pool:
+                    self.pool[sid].close()
+                    del self.pool[sid]
+                    del self.last_used[sid]
+
+# Global connection pool
+connection_pool = ConnectionPool()
 
 # Try to import database drivers
 try:
@@ -2007,6 +2050,176 @@ def automated_irail_data_collection(mytimer: func.TimerRequest) -> None:
         logger.info(f"Timer execution completed successfully")
         logger.info(f"Execution duration: {execution_duration:.2f} seconds")
         logger.info(f"Completed at: {end_time.isoformat()} (UTC)")
+        
+    except Exception as e:
+        logger.error(f"Timer function failed with error: {str(e)}")
+        logger.error(f"Error type: {type(e).__name__}")
+        
+        # Try to log basic execution info even on failure
+        try:
+            end_time = datetime.now(timezone.utc)
+            if 'start_time' in locals():
+                execution_duration = (end_time - start_time).total_seconds()
+                logger.error(f"Failed execution duration: {execution_duration:.2f} seconds")
+        except:
+            pass
+
+# ============================================================================
+# WARM-UP AND PERFORMANCE OPTIMIZATIONS
+# ============================================================================
+
+@app.function_name("warmup")
+@app.route(route="warmup", methods=["GET", "POST"])
+def warmup(req: func.HttpRequest) -> func.HttpResponse:
+    """
+    Warm-up function to prevent cold starts and keep the function app alive.
+    This function should be called periodically to maintain warm instances.
+    """
+    try:
+        logger.info("🔥 Warmup function triggered - keeping function app alive")
+        
+        start_time = datetime.now(timezone.utc)
+        
+        # Warm up database connection
+        db_warmup_status = "not_available"
+        if PYODBC_AVAILABLE:
+            try:
+                db_manager = DatabaseManager()
+                if db_manager and hasattr(db_manager, 'test_connection'):
+                    if db_manager.test_connection():
+                        db_warmup_status = "connected"
+                    else:
+                        db_warmup_status = "failed"
+                else:
+                    db_warmup_status = "no_connection_test"
+            except Exception as e:
+                logger.warning(f"Database warmup failed: {str(e)}")
+                db_warmup_status = f"error: {str(e)[:50]}"
+        
+        # Warm up HTTP connections
+        session = connection_pool.get_session()
+        http_warmup_status = "ready"
+        
+        # Test a quick iRail API call to warm up external connections
+        irail_status = "not_tested"
+        try:
+            base_url = get_config("IRAIL_API_BASE_URL", "https://api.irail.be")
+            test_url = f"{base_url}/stations/"
+            
+            response = session.get(
+                test_url,
+                timeout=10,
+                params={"format": "json", "lang": "en"}
+            )
+            
+            if response.status_code == 200:
+                stations_data = response.json()
+                station_count = len(stations_data.get("station", []))
+                irail_status = f"connected ({station_count} stations available)"
+            else:
+                irail_status = f"http_error_{response.status_code}"
+                
+        except requests.RequestException as e:
+            logger.warning(f"iRail API warmup failed: {str(e)}")
+            irail_status = f"connection_error: {str(e)[:30]}"
+        
+        # Clean up old connections
+        connection_pool.cleanup_old_sessions()
+        
+        # Calculate warmup duration
+        end_time = datetime.now(timezone.utc)
+        warmup_duration = (end_time - start_time).total_seconds()
+        
+        # Prepare warmup report
+        warmup_report = {
+            "status": "warm",
+            "timestamp": end_time.isoformat(),
+            "warmup_duration_seconds": round(warmup_duration, 3),
+            "components": {
+                "database": db_warmup_status,
+                "http_connections": http_warmup_status,
+                "irail_api": irail_status
+            },
+            "performance": {
+                "active_sessions": len(connection_pool.pool),
+                "function_memory_mb": get_memory_usage(),
+                "python_version": sys.version.split()[0]
+            },
+            "next_warmup_recommended": (end_time + timedelta(minutes=4)).isoformat()
+        }
+        
+        logger.info(f"🔥 Warmup completed in {warmup_duration:.3f}s - Function ready for requests")
+        logger.info(f"   Database: {db_warmup_status}")
+        logger.info(f"   iRail API: {irail_status}")
+        logger.info(f"   Active HTTP sessions: {len(connection_pool.pool)}")
+        
+        return func.HttpResponse(
+            json.dumps(warmup_report, indent=2),
+            status_code=200,
+            headers={
+                "Content-Type": "application/json",
+                "X-Function-Status": "warm",
+                "Cache-Control": "no-cache"
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Warmup function failed: {str(e)}")
+        return func.HttpResponse(
+            json.dumps({
+                "status": "warmup_failed",
+                "error": str(e),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }),
+            status_code=500,
+            headers={"Content-Type": "application/json"}
+        )
+
+@app.function_name("keep_alive")
+@app.timer_trigger(schedule="0 */3 * * * *", arg_name="timer", run_on_startup=False)
+def keep_alive(timer: func.TimerRequest) -> None:
+    """
+    Timer function that runs every 3 minutes to keep the function app warm.
+    This prevents cold starts by ensuring there's always activity.
+    """
+    try:
+        logger.info("⏰ Keep-alive timer triggered - maintaining warm state")
+        
+        # Clean up old connections
+        connection_pool.cleanup_old_sessions()
+        
+        # Quick health check
+        session = connection_pool.get_session()
+        
+        # Log current state
+        logger.info(f"   Active HTTP sessions: {len(connection_pool.pool)}")
+        logger.info(f"   Memory usage: {get_memory_usage()} MB")
+        logger.info(f"   Next execution: {timer.past_due}")
+        
+        # Test database if available
+        if PYODBC_AVAILABLE:
+            try:
+                db_manager = DatabaseManager()
+                if db_manager and hasattr(db_manager, 'test_connection'):
+                    db_status = "connected" if db_manager.test_connection() else "disconnected"
+                    logger.info(f"   Database status: {db_status}")
+            except Exception as e:
+                logger.warning(f"   Database check failed: {str(e)}")
+        
+        logger.info("⏰ Keep-alive completed - function remains warm")
+        
+    except Exception as e:
+        logger.error(f"Keep-alive timer failed: {str(e)}")
+
+def get_memory_usage():
+    """Get current memory usage in MB (approximate)"""
+    try:
+        import psutil
+        import os
+        process = psutil.Process(os.getpid())
+        return round(process.memory_info().rss / 1024 / 1024, 1)
+    except:
+        return "unknown"
         
         # Metrics for Application Insights (if available)
         if APPINSIGHTS_AVAILABLE and appinsights_connection_string:

@@ -147,52 +147,7 @@ resource "azurerm_key_vault_access_policy" "current" {
   ]
 }
 
-# SQL Server
-resource "azurerm_mssql_server" "main" {
-  name                         = "sql-${local.resource_prefix}-${local.resource_suffix}"
-  resource_group_name          = azurerm_resource_group.main.name
-  location                     = azurerm_resource_group.main.location
-  version                      = "12.0"
-  administrator_login          = var.sql_admin_username
-  administrator_login_password = var.sql_admin_password
-  
-  minimum_tls_version = "1.2"
-  
-  tags = local.common_tags
-}
 
-# SQL Database
-resource "azurerm_mssql_database" "main" {
-  name         = "sqldb-${local.resource_prefix}-${local.resource_suffix}"
-  server_id    = azurerm_mssql_server.main.id
-  collation    = "SQL_Latin1_General_CP1_CI_AS"
-  license_type = "LicenseIncluded"
-  sku_name     = "Basic"
-  
-  # Enable short-term backup retention
-  short_term_retention_policy {
-    retention_days = 7
-  }
-  
-  tags = local.common_tags
-}
-
-# SQL Server Firewall Rule - Allow Azure services
-resource "azurerm_mssql_firewall_rule" "azure_services" {
-  name             = "AllowAzureServices"
-  server_id        = azurerm_mssql_server.main.id
-  start_ip_address = "0.0.0.0"
-  end_ip_address   = "0.0.0.0"
-}
-
-# SQL Server Firewall Rule - Allow your IP (will be updated in CI/CD)
-resource "azurerm_mssql_firewall_rule" "developer" {
-  count            = var.developer_ip != "" ? 1 : 0
-  name             = "AllowDeveloperIP"
-  server_id        = azurerm_mssql_server.main.id
-  start_ip_address = var.developer_ip
-  end_ip_address   = var.developer_ip
-}
 
 # User Assigned Managed Identity for Function App
 resource "azurerm_user_assigned_identity" "function_identity" {
@@ -209,7 +164,7 @@ resource "azurerm_service_plan" "main" {
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   os_type             = "Linux"
-  sku_name            = "FC1"  # Flex Consumption plan - Better performance than Y1
+  sku_name            = "Y1"  # Consumption plan - more widely supported than FC1
   
   tags = local.common_tags
 }
@@ -264,35 +219,6 @@ resource "azurerm_linux_function_app" "main" {
   depends_on = [
     azurerm_key_vault_access_policy.current
   ]
-}
-
-# Key Vault Access Policy for Function App Managed Identity
-resource "azurerm_key_vault_access_policy" "function_app" {
-  key_vault_id = azurerm_key_vault.main.id
-  tenant_id    = azurerm_user_assigned_identity.function_identity.tenant_id
-  object_id    = azurerm_user_assigned_identity.function_identity.principal_id
-  
-  secret_permissions = [
-    "Get", "List"
-  ]
-}
-
-# Store SQL connection string in Key Vault
-resource "azurerm_key_vault_secret" "sql_connection_string" {
-  name         = "sql-connection-string"
-  value        = "Server=tcp:${azurerm_mssql_server.main.fully_qualified_domain_name},1433;Initial Catalog=${azurerm_mssql_database.main.name};Authentication=Active Directory Managed Identity;User Id=${azurerm_user_assigned_identity.function_identity.client_id};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
-  key_vault_id = azurerm_key_vault.main.id
-  
-  depends_on = [
-    azurerm_key_vault_access_policy.current
-  ]
-}
-
-# Role assignment: Function App Managed Identity -> SQL Database
-resource "azurerm_role_assignment" "sql_contributor" {
-  scope                = azurerm_mssql_database.main.id
-  role_definition_name = "SQL DB Contributor"
-  principal_id         = azurerm_user_assigned_identity.function_identity.principal_id
 }
 
 # Container Registry (for containerized deployment option)

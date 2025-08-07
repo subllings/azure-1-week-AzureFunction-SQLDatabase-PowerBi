@@ -150,6 +150,17 @@ resource "azurerm_data_factory_pipeline" "irail_enhanced_collection" {
   parameters = {
     "execution_timestamp" = "@utcnow()"
     "station_limit"      = "10"
+    "station_list"       = jsonencode([
+      "Brussels-Central",
+      "Brussels-North", 
+      "Brussels-South",
+      "Antwerp-Central",
+      "Ghent-Sint-Pieters",
+      "Leuven",
+      "Charleroi-Sud",
+      "Bruges",
+      "Liege-Guillemins"
+    ])
   }
 
   # Enhanced activities for individual station collection
@@ -252,5 +263,102 @@ resource "azurerm_data_factory_pipeline" "irail_error_handler" {
     "Error Handling",
     "Notifications",
     "Monitoring"
+  ]
+}
+
+# ============================================================================
+# WARMUP PIPELINE - Keep Functions Alive
+# ============================================================================
+
+resource "azurerm_data_factory_pipeline" "irail_function_warmup" {
+  name            = "pipeline_irail_function_warmup"
+  data_factory_id = azurerm_data_factory.irail_data_factory.id
+  description     = "Keeps Azure Functions warm to prevent cold starts and timeouts"
+  
+  folder = "iRail Data Collection/Maintenance"
+  
+  parameters = {
+    "execution_timestamp" = "@utcnow()"
+    "warmup_type"        = "regular"
+  }
+  
+  activities_json = jsonencode([
+    # Step 1: Function Warmup
+    {
+      "name": "WarmupFunction"
+      "type": "WebActivity"
+      "policy": {
+        "timeout": "00:02:00"
+        "retry": 2
+        "retryIntervalInSeconds": 15
+      }
+      "typeProperties": {
+        "url": "https://irail-functions-simple.azurewebsites.net/api/warmup"
+        "method": "GET"
+        "headers": {
+          "Content-Type": "application/json"
+          "User-Agent": "Azure-Data-Factory-Function-Warmup"
+          "X-Warmup-Type": "@{pipeline().parameters.warmup_type}"
+        }
+      }
+    },
+    
+    # Step 2: Health Verification
+    {
+      "name": "VerifyHealth"
+      "type": "WebActivity"
+      "dependsOn": [
+        {
+          "activity": "WarmupFunction"
+          "dependencyConditions": ["Succeeded"]
+        }
+      ]
+      "policy": {
+        "timeout": "00:01:00"
+        "retry": 1
+        "retryIntervalInSeconds": 10
+      }
+      "typeProperties": {
+        "url": "https://irail-functions-simple.azurewebsites.net/api/health"
+        "method": "GET"
+        "headers": {
+          "Content-Type": "application/json"
+          "User-Agent": "Azure-Data-Factory-Health-Check"
+        }
+      }
+    },
+    
+    # Step 3: Test iRail API Connection
+    {
+      "name": "TestiRailConnection"
+      "type": "WebActivity"
+      "dependsOn": [
+        {
+          "activity": "VerifyHealth"
+          "dependencyConditions": ["Succeeded"]
+        }
+      ]
+      "policy": {
+        "timeout": "00:01:00"
+        "retry": 1
+        "retryIntervalInSeconds": 10
+      }
+      "typeProperties": {
+        "url": "https://irail-functions-simple.azurewebsites.net/api/debug"
+        "method": "GET"
+        "headers": {
+          "Content-Type": "application/json"
+          "User-Agent": "Azure-Data-Factory-Connection-Test"
+          "X-Test-Type": "warmup"
+        }
+      }
+    }
+  ])
+  
+  annotations = [
+    "iRail",
+    "Function Warmup",
+    "Cold Start Prevention", 
+    "Performance"
   ]
 }

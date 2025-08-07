@@ -41,8 +41,8 @@ resource "azurerm_mssql_database" "irail_database" {
   # S2 (Standard) for production
   sku_name = var.environment == "production" ? "S2" : "Basic"
   
-  # Storage configuration
-  max_size_gb = var.environment == "production" ? 250 : 32
+  # Storage configuration - Basic tier max is 2GB
+  max_size_gb = var.environment == "production" ? 250 : 2
   
   # Backup configuration
   short_term_retention_policy {

@@ -173,6 +173,41 @@ resource "azurerm_data_factory_trigger_tumbling_window" "irail_tumbling_window" 
   activated = false  # Set to true if you prefer tumbling window over schedule trigger
 }
 
+# ============================================================================
+# WARMUP TRIGGER - Keep Functions Alive Every 3 Minutes
+# ============================================================================
+
+resource "azurerm_data_factory_trigger_schedule" "irail_function_warmup_trigger" {
+  name          = "trigger_irail_function_warmup_3min"
+  data_factory_id = azurerm_data_factory.irail_data_factory.id
+  description   = "Triggers function warmup every 3 minutes to prevent cold starts"
+  
+  # Every 3 minutes to keep functions warm
+  frequency = "Minute"
+  interval  = 3
+  
+  activated = true
+  
+  # Start immediately
+  start_time = "2024-01-01T00:00:00Z"
+  time_zone  = "UTC"
+  
+  pipeline {
+    name = azurerm_data_factory_pipeline.irail_function_warmup.name
+    parameters = {
+      "execution_timestamp" = "@trigger().scheduledTime"
+      "warmup_type"        = "scheduled"
+    }
+  }
+  
+  annotations = [
+    "iRail",
+    "Function Warmup",
+    "Every 3 Minutes",
+    "Cold Start Prevention"
+  ]
+}
+
 # Custom event trigger (for manual triggering or external events)
 # Temporarily commented out - requires eventgrid_topic_id
 # resource "azurerm_data_factory_trigger_custom_event" "irail_custom_event" {
