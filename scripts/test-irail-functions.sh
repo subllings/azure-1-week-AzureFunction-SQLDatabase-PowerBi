@@ -7,6 +7,7 @@
 # =============================================================================
 # cd /e/_SoftEng/_BeCode/azure-1-week-subllings
 # chmod +x ./scripts/test-irail-functions.sh
+# chmod +x ./scripts/test-irail-functions.sh
 # ./scripts/test-irail-functions.sh
 # =============================================================================
 
@@ -321,6 +322,13 @@ test_azure_data_factory() {
     echo -e "==============================================================================${NC}"
     echo ""
     
+    # Add option to skip Azure Data Factory checks
+    if [[ "${SKIP_ADF_CHECK:-}" == "true" ]]; then
+        echo -e "${YELLOW}Skipping Azure Data Factory checks (SKIP_ADF_CHECK=true)${NC}"
+        echo -e "${BLUE}To enable: unset SKIP_ADF_CHECK or set SKIP_ADF_CHECK=false${NC}"
+        return 0
+    fi
+    
     local resource_group="rg-irail-dev-i6lr9a"
     local factory_name="df-irail-data-pobm4m"
     local trigger_name="trigger_irail_collection_every_5min"
@@ -353,13 +361,20 @@ test_azure_data_factory() {
     echo ""
     echo -e "${BLUE}[STEP 2]${NC} Checking Data Factory trigger status..."
     
-    # Check trigger status
-    trigger_status=$(az datafactory trigger show \
+    # Check trigger status with timeout
+    echo -e "  ${CYAN}Querying trigger status (max 30 seconds)...${NC}"
+    trigger_status=$(timeout 30s az datafactory trigger show \
         --resource-group "$resource_group" \
         --factory-name "$factory_name" \
         --name "$trigger_name" \
         --query "properties.runtimeState" \
         -o tsv 2>/dev/null || echo "ERROR")
+    
+    # Check if timeout occurred
+    if [[ $? -eq 124 ]]; then
+        echo -e "  ${YELLOW}Azure CLI command timed out after 30 seconds${NC}"
+        trigger_status="TIMEOUT"
+    fi
     
     if [[ "$trigger_status" == "Started" ]]; then
         echo -e "  ${GREEN}Data Factory trigger is ACTIVE${NC}"
@@ -375,26 +390,44 @@ test_azure_data_factory() {
         echo ""
         echo -e "  ${CYAN}To start the trigger:${NC}"
         echo "    az datafactory trigger start --resource-group $resource_group --factory-name $factory_name --name $trigger_name"
+    elif [[ "$trigger_status" == "TIMEOUT" ]]; then
+        echo -e "  ${YELLOW}Azure CLI command timed out${NC}"
+        echo -e "  ${BLUE}This might indicate network issues or Azure CLI problems${NC}"
+        echo -e "  ${CYAN}Try manually checking the trigger status:${NC}"
+        echo "    az datafactory trigger show --resource-group $resource_group --factory-name $factory_name --name $trigger_name"
     else
         echo -e "  ${RED}Failed to get trigger status or trigger not found${NC}"
         echo -e "  ${YELLOW}Error: ${trigger_status}${NC}"
+        echo -e "  ${CYAN}Possible issues:${NC}"
+        echo -e "    - Resource group or factory name incorrect"
+        echo -e "    - Trigger name incorrect" 
+        echo -e "    - Insufficient permissions"
+        echo -e "    - Azure CLI authentication issues"
         return 1
     fi
     
     echo ""
     echo -e "${BLUE}[STEP 3]${NC} Getting recent pipeline runs..."
     
-    # Get recent pipeline runs (last 24 hours)
+    # Get recent pipeline runs (last 24 hours) with timeout
     start_time=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%S.000Z 2>/dev/null || echo "2025-08-05T00:00:00.000Z")
     end_time=$(date -u +%Y-%m-%dT%H:%M:%S.000Z 2>/dev/null || echo "2025-08-06T23:59:59.999Z")
     
-    pipeline_runs=$(az datafactory pipeline-run query \
+    echo -e "  ${CYAN}Querying pipeline runs (max 30 seconds)...${NC}"
+    pipeline_runs=$(timeout 30s az datafactory pipeline-run query \
         --resource-group "$resource_group" \
         --factory-name "$factory_name" \
         --start-time "$start_time" \
         --end-time "$end_time" \
         --query "value[?pipelineName=='$pipeline_name'] | [0:5]" \
         -o json 2>/dev/null || echo "[]")
+    
+    # Check if timeout occurred
+    if [[ $? -eq 124 ]]; then
+        echo -e "  ${YELLOW}Pipeline runs query timed out after 30 seconds${NC}"
+        echo -e "  ${BLUE}Skipping detailed pipeline run analysis${NC}"
+        pipeline_runs="[]"
+    fi
     
     if [[ "$pipeline_runs" != "[]" && "$pipeline_runs" != "null" ]]; then
         echo -e "  ${GREEN}Found recent pipeline executions${NC}"
