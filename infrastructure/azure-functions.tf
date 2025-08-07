@@ -40,7 +40,7 @@ resource "azurerm_linux_function_app" "irail_functions" {
 
     # Python runtime configuration for Y1 plan
     application_stack {
-      python_version = "3.11"
+      python_version = "3.12"
     }
   }
 
