@@ -1,22 +1,3 @@
-# =================================================================    # Runtime configuration
-    "FUNCTIONS_WORKER_RUNTIME"            = "python"
-    "FUNCTIONS_EXTENSION_VERSION"          = "~4"
-    "AzureWebJobsFeatureFlags"            = "EnableWorkerIndexing"
-    "PYTHON_ENABLE_WORKER_EXTENSIONS"     = "1"
-    
-    # Performance and Cold Start Prevention
-    "WEBSITE_USE_PLACEHOLDER"             = "0"  # Disable placeholder to reduce cold starts
-    "WEBSITE_WARMUP_PATH"                 = "/api/warmup"  # Path to warmup function
-    "WEBSITE_PRELOAD_ENABLED"             = "1"  # Enable preload for faster cold starts
-    "WEBSITE_RUN_FROM_PACKAGE"            = "1"  # Run from package for better performance
-    "WEBSITE_HTTPSCALEV2_ENABLED"         = "1"  # Enable HTTP scaling v2
-    "WEBSITE_MAX_DYNAMIC_APPLICATION_SCALE_OUT" = "5"  # Reasonable limit for staging
-    
-    # Container settings (for container deployment)
-    "WEBSITES_ENABLE_APP_SERVICE_STORAGE" = "false"
-    "DOCKER_REGISTRY_SERVER_URL"          = "https://${azurerm_container_registry.main.login_server}"
-    "DOCKER_REGISTRY_SERVER_USERNAME"     = azurerm_container_registry.main.admin_username
-    "DOCKER_REGISTRY_SERVER_PASSWORD"     = azurerm_container_registry.main.admin_password=
 # Azure Functions App for iRail Train Data API
 # =============================================================================
 # This creates the Azure Functions App that will host all the iRail APIs
@@ -29,27 +10,12 @@ resource "azurerm_linux_function_app" "irail_functions" {
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   
-  # Storage configuration
+  # Storage configuration for Consumption plan (Y1)
   storage_account_name       = azurerm_storage_account.function_storage.name
   storage_account_access_key = azurerm_storage_account.function_storage.primary_access_key
   
   # Link to App Service Plan
   service_plan_id = azurerm_service_plan.irail_functions_plan.id
-  
-  # Flex Consumption configuration
-  function_app_config {
-    deployment_settings {
-      maximum_instance_count = 100
-    }
-    runtime {
-      name    = "python"
-      version = "3.12"
-    }
-    scale_and_concurrency {
-      maximum_instance_count              = 100
-      instance_memory                     = 2048
-    }
-  }
   
   # Managed Identity configuration
   identity {
@@ -57,24 +23,16 @@ resource "azurerm_linux_function_app" "irail_functions" {
     identity_ids = [azurerm_user_assigned_identity.function_identity.id]
   }
   
-  # Site configuration
+  # Site configuration for Flex Consumption (FC1) plan
   site_config {
-    # Application stack
-    application_stack {
-      python_version = "3.12"
-    }
-    
-    # Enable container deployment option
-    container_registry_use_managed_identity = true
-    
     # CORS settings for frontend integration
     cors {
       allowed_origins     = ["*"]
       support_credentials = false
     }
     
-    # Performance settings
-    always_on = var.environment == "production" ? true : false
+    # Performance settings for FC1 plan
+    always_on = false  # Always_on is not available with FC1 plan
     
     # Application Insights integration
     application_insights_key               = azurerm_application_insights.main.instrumentation_key
@@ -86,10 +44,21 @@ resource "azurerm_linux_function_app" "irail_functions" {
     # Runtime configuration
     "FUNCTIONS_WORKER_RUNTIME"             = "python"
     "FUNCTIONS_EXTENSION_VERSION"          = "~4"
+    
+    # Function timeout settings for Flex Consumption (FC1) plan
+    "functionTimeout"                     = "00:10:00"  # 10 minute timeout (FC1 supports longer execution)
+    "FUNCTIONS_WORKER_PROCESS_COUNT"      = "1"
+    
+    # FC1-specific settings
+    "FUNCTIONS_WORKER_RUNTIME_VERSION"    = "3.12"
     "AzureWebJobsFeatureFlags"            = "EnableWorkerIndexing"
     "PYTHON_ENABLE_WORKER_EXTENSIONS"     = "1"
     
-    # Container settings (for container deployment)
+    # Performance settings for Consumption plan
+    "WEBSITE_RUN_FROM_PACKAGE"            = "1"  # Run from package for better performance
+    "WEBSITE_ENABLE_SYNC_UPDATE_SITE"     = "true"
+    
+    # Container settings (for container deployment if needed)
     "WEBSITES_ENABLE_APP_SERVICE_STORAGE" = "false"
     "DOCKER_REGISTRY_SERVER_URL"          = "https://${azurerm_container_registry.main.login_server}"
     "DOCKER_REGISTRY_SERVER_USERNAME"     = azurerm_container_registry.main.admin_username
@@ -135,13 +104,6 @@ resource "azurerm_key_vault_access_policy" "function_app" {
   secret_permissions = [
     "Get", "List"
   ]
-}
-
-# Role assignment: Function App Managed Identity -> Container Registry
-resource "azurerm_role_assignment" "function_acr_pull" {
-  scope                = azurerm_container_registry.main.id
-  role_definition_name = "AcrPull"
-  principal_id         = azurerm_user_assigned_identity.function_identity.principal_id
 }
 
 # Output the Function App information

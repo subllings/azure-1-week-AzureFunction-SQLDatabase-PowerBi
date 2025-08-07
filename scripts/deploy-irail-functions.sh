@@ -1,15 +1,12 @@
+#!/bin/bash
 # =============================================================================
-# Azure Functions Deployment Script with ODBC Support - iRail Train Data API
+# Azure Functions Deployment Script - Staging Environment
 # =============================================================================
-# This script deploys the iRail Functions to Azure with proper ODBC configuration
-# 
-# Usage Instructions:
-# cd /e/_SoftEng/_BeCode/azure-1-week-subllings  # Navigate to project directory
-# chmod +x scripts/*.sh                          # Make scripts executable
-# ./scripts/deploy-irail-functions.sh            # Execute this deployment script
+# Deploys the iRail Functions to the staging environment created by Terraform
+# This script uses the infrastructure outputs from the staging deployment
 # =============================================================================
 
-#!/bin/bash
+set -e  # Exit on any error
 
 # Colors for output
 RED='\033[0;31m'
@@ -17,19 +14,6 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
-
-# Configuration
-RESOURCE_GROUP="irail-functions-simple-rg"
-FUNCTION_APP_NAME="irail-functions-simple"
-STORAGE_ACCOUNT="irailsimplestorage"
-LOCATION="westeurope"
-
-# Database configuration - use your provided credentials
-SQL_SERVER="traindata-sql-subllings.database.windows.net"
-SQL_DATABASE="traindata-db"
-SQL_USERNAME="sqladmin"
-SQL_PASSWORD="MiLolita421+"
-SQL_CONNECTION_STRING="Driver={ODBC Driver 18 for SQL Server};Server=tcp:${SQL_SERVER},1433;Database=${SQL_DATABASE};Uid=${SQL_USERNAME};Pwd=${SQL_PASSWORD};Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
 
 print_success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
@@ -47,62 +31,210 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-check_prerequisites() {
-    print_info "Checking prerequisites..."
+print_header() {
+    echo ""
+    echo -e "${BLUE}=====================================${NC}"
+    echo -e "${BLUE} Deploy Functions to Staging${NC}"
+    echo -e "${BLUE}=====================================${NC}"
+}
+
+# Function to get Terraform output
+get_terraform_output() {
+    local output_name=$1
+    cd infrastructure
+    terraform output -raw "$output_name" 2>/dev/null || echo ""
+    cd ..
+}
+
+deploy_function_code() {
+    print_header
     
-    # Check Azure CLI
+    # Get infrastructure details from Terraform outputs
+    FUNCTION_APP_NAME=$(get_terraform_output "function_app_name")
+    RESOURCE_GROUP_NAME=$(get_terraform_output "resource_group_name")
+    SQL_CONNECTION_STRING=$(get_terraform_output "sql_connection_string")
+    
+    if [[ -z "$FUNCTION_APP_NAME" ]]; then
+        print_error "Could not retrieve function app name from Terraform outputs"
+        print_info "Make sure you've run the staging infrastructure deployment first"
+        print_info "  ./scripts/deploy-staging.sh"
+        exit 1
+    fi
+    
+    print_info "Deploying to Function App: $FUNCTION_APP_NAME"
+    print_info "Resource Group: $RESOURCE_GROUP_NAME"
+    
+    # Check if Azure CLI is available and user is logged in
     if ! command -v az &> /dev/null; then
-        print_error "Azure CLI is not installed. Please install it from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli"
+        print_error "Azure CLI is not installed"
         exit 1
     fi
     
-    # Check func core tools
-    if ! command -v func &> /dev/null; then
-        print_error "Azure Functions Core Tools is not installed. Please install it from https://docs.microsoft.com/en-us/azure/azure-functions/functions-run-local"
-        exit 1
-    fi
-    
-    # Check if logged in to Azure
     if ! az account show &> /dev/null; then
         print_error "Not logged in to Azure. Please run 'az login' first"
         exit 1
     fi
     
-    print_success "Prerequisites check completed"
+    # Navigate to the function directory
+    if [[ ! -d "azure_function" ]]; then
+        print_error "azure_function directory not found"
+        exit 1
+    fi
+    
+    cd azure_function
+    
+    # Check if function_app.py exists
+    if [[ ! -f "function_app.py" ]]; then
+        print_error "function_app.py not found in azure_function directory"
+        exit 1
+    fi
+    
+    print_info "Setting up function app configuration..."
+    
+    # Configure app settings for the function app
+    print_info "Updating application settings..."
+    az functionapp config appsettings set \
+        --name "$FUNCTION_APP_NAME" \
+        --resource-group "$RESOURCE_GROUP_NAME" \
+        --settings \
+            "SQL_CONNECTION_STRING=$SQL_CONNECTION_STRING" \
+            "IRAIL_API_BASE_URL=https://api.irail.be" \
+            "IRAIL_API_FORMAT=json" \
+            "IRAIL_API_LANG=en" \
+            "PROJECT_NAME=Azure Train Data Pipeline" \
+            "ENVIRONMENT=staging" \
+            "FUNCTIONS_WORKER_RUNTIME=python" \
+            "FUNCTIONS_EXTENSION_VERSION=~4" \
+            "PYTHON_VERSION=3.12" \
+        --output none
+    
+    if [[ $? -eq 0 ]]; then
+        print_success "Application settings configured successfully"
+    else
+        print_error "Failed to configure application settings"
+        exit 1
+    fi
+    
+    # Deploy the function code using zip deployment
+    print_info "Creating deployment package..."
+    
+    # Create a temporary directory for deployment
+    TEMP_DIR=$(mktemp -d)
+    cp -r . "$TEMP_DIR/"
+    
+    # Remove unnecessary files from deployment package
+    cd "$TEMP_DIR"
+    rm -rf __pycache__ .git .vscode *.pyc
+    
+    # Create zip file
+    zip -r ../function-deployment.zip . -q
+    
+    print_info "Deploying function code..."
+    
+    # Deploy using Azure CLI
+    az functionapp deployment source config-zip \
+        --name "$FUNCTION_APP_NAME" \
+        --resource-group "$RESOURCE_GROUP_NAME" \
+        --src "../function-deployment.zip" \
+        --timeout 300 \
+        --output none
+    
+    if [[ $? -eq 0 ]]; then
+        print_success "Function code deployed successfully"
+    else
+        print_error "Failed to deploy function code"
+        exit 1
+    fi
+    
+    # Clean up
+    rm -rf "$TEMP_DIR" "../function-deployment.zip"
+    
+    # Go back to project root
+    cd ..
+    
+    # Wait for deployment to complete and restart the function app
+    print_info "Restarting function app to apply changes..."
+    az functionapp restart \
+        --name "$FUNCTION_APP_NAME" \
+        --resource-group "$RESOURCE_GROUP_NAME" \
+        --output none
+    
+    if [[ $? -eq 0 ]]; then
+        print_success "Function app restarted successfully"
+    else
+        print_warning "Function app restart may have failed, but deployment should still work"
+    fi
+    
+    # Get the function app URL
+    FUNCTION_URL="https://${FUNCTION_APP_NAME}.azurewebsites.net"
+    
+    print_success "Function deployment completed!"
+    echo ""
+    echo -e "${GREEN}Function App Details:${NC}"
+    echo -e "  Name: $FUNCTION_APP_NAME"
+    echo -e "  URL: $FUNCTION_URL"
+    echo -e "  Resource Group: $RESOURCE_GROUP_NAME"
+    echo ""
+    echo -e "${GREEN}Available Endpoints:${NC}"
+    echo -e "  Health Check: $FUNCTION_URL/api/health"
+    echo -e "  PowerBI Data: $FUNCTION_URL/api/powerbi-data"
+    echo -e "  Analytics: $FUNCTION_URL/api/analytics"
+    echo ""
+    echo -e "${YELLOW}Next Steps:${NC}"
+    echo -e "  1. Test the endpoints to verify deployment"
+    echo -e "  2. Monitor the function logs in Azure Portal"
+    echo -e "  3. Check Data Factory pipelines are working correctly"
+    echo ""
 }
 
-deploy_function_with_requirements() {
-    print_info "Creating custom deployment with ODBC support..."
+# Test function endpoints
+test_endpoints() {
+    print_info "Testing function endpoints..."
     
-    # Create a temporary directory for the deployment
-    temp_dir=$(mktemp -d)
-    deployment_dir="$temp_dir/deployment"
+    FUNCTION_APP_NAME=$(get_terraform_output "function_app_name")
+    FUNCTION_URL="https://${FUNCTION_APP_NAME}.azurewebsites.net"
     
-    # Copy function files
-    mkdir -p "$deployment_dir"
-    cp -r azure_function/* "$deployment_dir/"
+    # Wait a moment for the function app to be ready
+    print_info "Waiting for function app to be ready..."
+    sleep 30
     
-    # Create updated requirements.txt with ODBC dependencies
-    cat > "$deployment_dir/requirements.txt" << 'EOF'
-# Azure Functions and Core
-azure-functions>=1.11.0
+    # Test health endpoint
+    print_info "Testing health endpoint..."
+    if curl -s -f "$FUNCTION_URL/api/health" > /dev/null; then
+        print_success "Health endpoint is responding"
+    else
+        print_warning "Health endpoint may not be ready yet (this is normal after deployment)"
+    fi
+    
+    print_info "You can test the endpoints manually with:"
+    echo "  curl $FUNCTION_URL/api/health"
+    echo "  curl $FUNCTION_URL/api/powerbi-data"
+    echo "  curl $FUNCTION_URL/api/analytics"
+}
 
-# HTTP Requests
-requests>=2.28.0
+# Main execution
+main() {
+    # Check if we're in the right directory
+    if [[ ! -f "azure_function/function_app.py" ]]; then
+        print_error "Please run this script from the project root directory"
+        exit 1
+    fi
+    
+    # Check if infrastructure is deployed
+    if [[ ! -f "infrastructure/terraform.tfstate" ]] && [[ ! -f "infrastructure/.terraform/terraform.tfstate" ]]; then
+        print_error "Terraform state not found. Please run infrastructure deployment first:"
+        print_info "  ./scripts/deploy-staging.sh"
+        exit 1
+    fi
+    
+    deploy_function_code
+    test_endpoints
+    
+    print_success "Staging function deployment completed successfully!"
+}
 
-# Database with ODBC support
-pyodbc>=5.0.0
-
-# Azure Identity and Authentication
-azure-identity>=1.12.0
-azure-keyvault-secrets>=4.7.0
-
-# Monitoring and Telemetry
-opencensus-ext-azure>=1.1.13
-opencensus-ext-requests>=0.8.0
-opencensus-ext-logging>=0.1.1
-
-# Data Processing
+# Execute main function
+main "$@"
 pandas>=1.5.0
 python-dateutil>=2.8.0
 

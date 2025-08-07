@@ -89,6 +89,7 @@ resource "azurerm_application_insights" "main" {
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   application_type    = "web"
+  workspace_id        = azurerm_log_analytics_workspace.main.id
   
   tags = local.common_tags
 }
@@ -156,69 +157,6 @@ resource "azurerm_user_assigned_identity" "function_identity" {
   resource_group_name = azurerm_resource_group.main.name
   
   tags = local.common_tags
-}
-
-# App Service Plan (Consumption)
-resource "azurerm_service_plan" "main" {
-  name                = "asp-${local.resource_prefix}-${local.resource_suffix}"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
-  os_type             = "Linux"
-  sku_name            = "Y1"  # Consumption plan - more widely supported than FC1
-  
-  tags = local.common_tags
-}
-
-# Function App
-resource "azurerm_linux_function_app" "main" {
-  name                = "func-${local.resource_prefix}-${local.resource_suffix}"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
-  
-  storage_account_name       = azurerm_storage_account.function_storage.name
-  storage_account_access_key = azurerm_storage_account.function_storage.primary_access_key
-  service_plan_id           = azurerm_service_plan.main.id
-  
-  # Managed Identity
-  identity {
-    type         = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.function_identity.id]
-  }
-  
-  site_config {
-    application_stack {
-      python_version = "3.10"
-    }
-    
-    # CORS settings
-    cors {
-      allowed_origins = ["*"]
-    }
-    
-    # Enable Application Insights
-    application_insights_key               = azurerm_application_insights.main.instrumentation_key
-    application_insights_connection_string = azurerm_application_insights.main.connection_string
-  }
-  
-  app_settings = {
-    "FUNCTIONS_WORKER_RUNTIME"           = "python"
-    "AzureWebJobsFeatureFlags"          = "EnableWorkerIndexing"
-    "APPINSIGHTS_INSTRUMENTATIONKEY"    = azurerm_application_insights.main.instrumentation_key
-    "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.main.connection_string
-    
-    # Database connection (will be populated via Key Vault reference)
-    "SQL_CONNECTION_STRING" = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=sql-connection-string)"
-    
-    # iRail API settings
-    "IRAIL_API_BASE_URL" = "https://api.irail.be"
-    "USER_AGENT"         = "BeCodeTrainApp/1.0 (student.project@becode.education)"
-  }
-  
-  tags = local.common_tags
-  
-  depends_on = [
-    azurerm_key_vault_access_policy.current
-  ]
 }
 
 # Container Registry (for containerized deployment option)

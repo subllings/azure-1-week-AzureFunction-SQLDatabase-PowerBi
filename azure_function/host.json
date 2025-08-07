@@ -21,6 +21,14 @@
     "counterThreshold": 0.80
   },
   "http": {
-    "routePrefix": "api"
+    "routePrefix": "api",
+    "maxOutstandingRequests": 200,
+    "maxConcurrentRequests": 100
+  },
+  "retry": {
+    "strategy": "exponentialBackoff",
+    "maxRetryCount": 3,
+    "minimumInterval": "00:00:01",
+    "maximumInterval": "00:00:15"
   }
 }
