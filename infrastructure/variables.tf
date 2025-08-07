@@ -4,7 +4,7 @@ variable "environment" {
   description = "Environment name (dev, staging, prod)"
   type        = string
   default     = "dev"
-  
+
   validation {
     condition     = contains(["dev", "staging", "prod"], var.environment)
     error_message = "Environment must be one of: dev, staging, prod."
@@ -28,7 +28,7 @@ variable "sql_admin_password" {
   description = "SQL Server administrator password"
   type        = string
   sensitive   = true
-  
+
   validation {
     condition     = length(var.sql_admin_password) >= 8
     error_message = "SQL admin password must be at least 8 characters long."

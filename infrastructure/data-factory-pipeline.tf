@@ -16,7 +16,7 @@ resource "azurerm_data_factory_pipeline" "irail_train_data_collection" {
   parameters = {
     "station_list" = jsonencode([
       "Brussels-Central",
-      "Brussels-North", 
+      "Brussels-North",
       "Brussels-South",
       "Antwerp-Central",
       "Ghent-Sint-Pieters",
@@ -26,7 +26,7 @@ resource "azurerm_data_factory_pipeline" "irail_train_data_collection" {
       "Liege-Guillemins"
     ])
     "execution_timestamp" = "@utcnow()"
-    "max_retries"        = "3"
+    "max_retries"         = "3"
   }
 
   # Pipeline activities as JSON
@@ -44,19 +44,19 @@ resource "azurerm_data_factory_pipeline" "irail_train_data_collection" {
         }
       }
       policy = {
-        timeout = "00:01:00"
-        retry   = 2
+        timeout                = "00:01:00"
+        retry                  = 2
         retryIntervalInSeconds = 30
       }
     },
-    
+
     # Activity 2: Trigger Data Collection (depends on health check)
     {
       name = "TriggerDataCollection"
       type = "WebActivity"
       dependsOn = [
         {
-          activity = "HealthCheck"
+          activity             = "HealthCheck"
           dependencyConditions = ["Succeeded"]
         }
       ]
@@ -69,8 +69,8 @@ resource "azurerm_data_factory_pipeline" "irail_train_data_collection" {
         }
       }
       policy = {
-        timeout = "00:05:00"
-        retry   = 3
+        timeout                = "00:05:00"
+        retry                  = 3
         retryIntervalInSeconds = 60
       }
     },
@@ -81,7 +81,7 @@ resource "azurerm_data_factory_pipeline" "irail_train_data_collection" {
       type = "WebActivity"
       dependsOn = [
         {
-          activity = "TriggerDataCollection"
+          activity             = "TriggerDataCollection"
           dependencyConditions = ["Succeeded"]
         }
       ]
@@ -94,8 +94,8 @@ resource "azurerm_data_factory_pipeline" "irail_train_data_collection" {
         }
       }
       policy = {
-        timeout = "00:02:00"
-        retry   = 1
+        timeout                = "00:02:00"
+        retry                  = 1
         retryIntervalInSeconds = 30
       }
     },
@@ -106,7 +106,7 @@ resource "azurerm_data_factory_pipeline" "irail_train_data_collection" {
       type = "WebActivity"
       dependsOn = [
         {
-          activity = "VerifyDatabaseUpdate"
+          activity             = "VerifyDatabaseUpdate"
           dependencyConditions = ["Succeeded"]
         }
       ]
@@ -114,14 +114,14 @@ resource "azurerm_data_factory_pipeline" "irail_train_data_collection" {
         url    = "https://irail-functions-simple.azurewebsites.net/api/debug"
         method = "GET"
         headers = {
-          "Content-Type"     = "application/json"
-          "User-Agent"       = "Azure-Data-Factory-Success-Logger"
+          "Content-Type"        = "application/json"
+          "User-Agent"          = "Azure-Data-Factory-Success-Logger"
           "X-Collection-Status" = "SUCCESS"
         }
       }
       policy = {
-        timeout = "00:01:00"
-        retry   = 1
+        timeout                = "00:01:00"
+        retry                  = 1
         retryIntervalInSeconds = 15
       }
     }
@@ -149,10 +149,10 @@ resource "azurerm_data_factory_pipeline" "irail_enhanced_collection" {
   # Pipeline parameters
   parameters = {
     "execution_timestamp" = "@utcnow()"
-    "station_limit"      = "10"
-    "station_list"       = jsonencode([
+    "station_limit"       = "10"
+    "station_list" = jsonencode([
       "Brussels-Central",
-      "Brussels-North", 
+      "Brussels-North",
       "Brussels-South",
       "Antwerp-Central",
       "Ghent-Sint-Pieters",
@@ -174,8 +174,8 @@ resource "azurerm_data_factory_pipeline" "irail_enhanced_collection" {
           value = "@pipeline().parameters.station_list"
           type  = "Expression"
         }
-        isSequential = false  # Parallel processing for efficiency
-        batchCount   = 3      # Process 3 stations at a time
+        isSequential = false # Parallel processing for efficiency
+        batchCount   = 3     # Process 3 stations at a time
         activities = [
           {
             name = "CollectStationData"
@@ -193,8 +193,8 @@ resource "azurerm_data_factory_pipeline" "irail_enhanced_collection" {
               }
             }
             policy = {
-              timeout = "00:03:00"
-              retry   = 2
+              timeout                = "00:03:00"
+              retry                  = 2
               retryIntervalInSeconds = 45
             }
           }
@@ -224,8 +224,8 @@ resource "azurerm_data_factory_pipeline" "irail_error_handler" {
 
   # Parameters for error handling
   parameters = {
-    "error_message"      = ""
-    "failed_activity"    = ""
+    "error_message"       = ""
+    "failed_activity"     = ""
     "execution_timestamp" = "@utcnow()"
   }
 
@@ -247,8 +247,8 @@ resource "azurerm_data_factory_pipeline" "irail_error_handler" {
         }
       }
       policy = {
-        timeout = "00:01:00"
-        retry   = 1
+        timeout                = "00:01:00"
+        retry                  = 1
         retryIntervalInSeconds = 15
       }
     }
@@ -274,91 +274,91 @@ resource "azurerm_data_factory_pipeline" "irail_function_warmup" {
   name            = "pipeline_irail_function_warmup"
   data_factory_id = azurerm_data_factory.irail_data_factory.id
   description     = "Keeps Azure Functions warm to prevent cold starts and timeouts"
-  
+
   folder = "iRail Data Collection/Maintenance"
-  
+
   parameters = {
     "execution_timestamp" = "@utcnow()"
-    "warmup_type"        = "regular"
+    "warmup_type"         = "regular"
   }
-  
+
   activities_json = jsonencode([
     # Step 1: Function Warmup
     {
-      "name": "WarmupFunction"
-      "type": "WebActivity"
-      "policy": {
-        "timeout": "00:02:00"
-        "retry": 2
-        "retryIntervalInSeconds": 15
+      "name" : "WarmupFunction"
+      "type" : "WebActivity"
+      "policy" : {
+        "timeout" : "00:02:00"
+        "retry" : 2
+        "retryIntervalInSeconds" : 15
       }
-      "typeProperties": {
-        "url": "https://irail-functions-simple.azurewebsites.net/api/warmup"
-        "method": "GET"
-        "headers": {
-          "Content-Type": "application/json"
-          "User-Agent": "Azure-Data-Factory-Function-Warmup"
-          "X-Warmup-Type": "@{pipeline().parameters.warmup_type}"
+      "typeProperties" : {
+        "url" : "https://irail-functions-simple.azurewebsites.net/api/warmup"
+        "method" : "GET"
+        "headers" : {
+          "Content-Type" : "application/json"
+          "User-Agent" : "Azure-Data-Factory-Function-Warmup"
+          "X-Warmup-Type" : "@{pipeline().parameters.warmup_type}"
         }
       }
     },
-    
+
     # Step 2: Health Verification
     {
-      "name": "VerifyHealth"
-      "type": "WebActivity"
-      "dependsOn": [
+      "name" : "VerifyHealth"
+      "type" : "WebActivity"
+      "dependsOn" : [
         {
-          "activity": "WarmupFunction"
-          "dependencyConditions": ["Succeeded"]
+          "activity" : "WarmupFunction"
+          "dependencyConditions" : ["Succeeded"]
         }
       ]
-      "policy": {
-        "timeout": "00:01:00"
-        "retry": 1
-        "retryIntervalInSeconds": 10
+      "policy" : {
+        "timeout" : "00:01:00"
+        "retry" : 1
+        "retryIntervalInSeconds" : 10
       }
-      "typeProperties": {
-        "url": "https://irail-functions-simple.azurewebsites.net/api/health"
-        "method": "GET"
-        "headers": {
-          "Content-Type": "application/json"
-          "User-Agent": "Azure-Data-Factory-Health-Check"
+      "typeProperties" : {
+        "url" : "https://irail-functions-simple.azurewebsites.net/api/health"
+        "method" : "GET"
+        "headers" : {
+          "Content-Type" : "application/json"
+          "User-Agent" : "Azure-Data-Factory-Health-Check"
         }
       }
     },
-    
+
     # Step 3: Test iRail API Connection
     {
-      "name": "TestiRailConnection"
-      "type": "WebActivity"
-      "dependsOn": [
+      "name" : "TestiRailConnection"
+      "type" : "WebActivity"
+      "dependsOn" : [
         {
-          "activity": "VerifyHealth"
-          "dependencyConditions": ["Succeeded"]
+          "activity" : "VerifyHealth"
+          "dependencyConditions" : ["Succeeded"]
         }
       ]
-      "policy": {
-        "timeout": "00:01:00"
-        "retry": 1
-        "retryIntervalInSeconds": 10
+      "policy" : {
+        "timeout" : "00:01:00"
+        "retry" : 1
+        "retryIntervalInSeconds" : 10
       }
-      "typeProperties": {
-        "url": "https://irail-functions-simple.azurewebsites.net/api/debug"
-        "method": "GET"
-        "headers": {
-          "Content-Type": "application/json"
-          "User-Agent": "Azure-Data-Factory-Connection-Test"
-          "X-Test-Type": "warmup"
+      "typeProperties" : {
+        "url" : "https://irail-functions-simple.azurewebsites.net/api/debug"
+        "method" : "GET"
+        "headers" : {
+          "Content-Type" : "application/json"
+          "User-Agent" : "Azure-Data-Factory-Connection-Test"
+          "X-Test-Type" : "warmup"
         }
       }
     }
   ])
-  
+
   annotations = [
     "iRail",
     "Function Warmup",
-    "Cold Start Prevention", 
+    "Cold Start Prevention",
     "Performance"
   ]
 }

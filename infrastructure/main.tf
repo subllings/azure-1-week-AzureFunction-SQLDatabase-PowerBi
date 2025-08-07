@@ -6,15 +6,15 @@ terraform {
       version = "~> 3.0"
     }
   }
-  
+
   # Backend configuration for state management with Azure AD authentication
-###  backend "azurerm" {
-###    resource_group_name  = "rg-iraildata"
-###    storage_account_name = "irailstorage1754441353"
-###    container_name       = "tfstate"
-###    key                  = "adf-iRail.tfstate"
-###    use_azuread_auth     = true
-###  }
+  ###  backend "azurerm" {
+  ###    resource_group_name  = "rg-iraildata"
+  ###    storage_account_name = "irailstorage1754441353"
+  ###    container_name       = "tfstate"
+  ###    key                  = "adf-iRail.tfstate"
+  ###    use_azuread_auth     = true
+  ###  }
 }
 # Azure Train Data Project - Terraform Configuration
 # Hardcore Level: Full CI/CD with Infrastructure as Code
@@ -55,7 +55,7 @@ locals {
   location        = "francecentral"
   resource_prefix = "${local.project_name}-${local.environment}"
   resource_suffix = random_string.suffix.result
-  
+
   # Common tags
   common_tags = {
     Project     = "Azure Train Data Pipeline"
@@ -76,10 +76,10 @@ resource "azurerm_resource_group" "main" {
 resource "azurerm_storage_account" "function_storage" {
   name                     = "st${replace(local.resource_prefix, "-", "")}${local.resource_suffix}"
   resource_group_name      = azurerm_resource_group.main.name
-  location                = azurerm_resource_group.main.location
+  location                 = azurerm_resource_group.main.location
   account_tier             = "Standard"
   account_replication_type = "LRS"
-  
+
   tags = local.common_tags
 }
 
@@ -90,7 +90,7 @@ resource "azurerm_application_insights" "main" {
   resource_group_name = azurerm_resource_group.main.name
   application_type    = "web"
   workspace_id        = azurerm_log_analytics_workspace.main.id
-  
+
   tags = local.common_tags
 }
 
@@ -101,7 +101,7 @@ resource "azurerm_log_analytics_workspace" "main" {
   resource_group_name = azurerm_resource_group.main.name
   sku                 = "PerGB2018"
   retention_in_days   = 30
-  
+
   tags = local.common_tags
 }
 
@@ -111,18 +111,18 @@ resource "azurerm_key_vault" "main" {
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   tenant_id           = data.azurerm_client_config.current.tenant_id
-  
+
   sku_name = "standard"
-  
+
   # Enable for deployment
   enabled_for_deployment          = true
   enabled_for_disk_encryption     = true
   enabled_for_template_deployment = true
-  
+
   # Soft delete and purge protection
   soft_delete_retention_days = 7
   purge_protection_enabled   = false
-  
+
   tags = local.common_tags
 }
 
@@ -134,15 +134,15 @@ resource "azurerm_key_vault_access_policy" "current" {
   key_vault_id = azurerm_key_vault.main.id
   tenant_id    = data.azurerm_client_config.current.tenant_id
   object_id    = data.azurerm_client_config.current.object_id
-  
+
   secret_permissions = [
     "Get", "List", "Set", "Delete", "Purge"
   ]
-  
+
   certificate_permissions = [
     "Get", "List", "Create", "Import", "Delete", "Purge"
   ]
-  
+
   key_permissions = [
     "Get", "List", "Create", "Delete", "Purge"
   ]
@@ -155,7 +155,7 @@ resource "azurerm_user_assigned_identity" "function_identity" {
   name                = "id-${local.resource_prefix}-func-${local.resource_suffix}"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
-  
+
   tags = local.common_tags
 }
 
@@ -166,7 +166,7 @@ resource "azurerm_container_registry" "main" {
   location            = azurerm_resource_group.main.location
   sku                 = "Basic"
   admin_enabled       = true
-  
+
   tags = local.common_tags
 }
 

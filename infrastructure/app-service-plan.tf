@@ -5,20 +5,20 @@
 # with different SKUs for staging and production environments
 # =============================================================================
 
-# App Service Plan - Flex Consumption Plan
+# App Service Plan - Consumption Plan (most cost-effective)
 resource "azurerm_service_plan" "irail_functions_plan" {
   name                = "asp-${local.project_name}-${local.environment}-${local.resource_suffix}"
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   os_type             = "Linux"
-  
-  # SKU: FC1 = Flex Consumption - Advanced serverless plan with 10 minute timeout
-  # Testing FC1 deployment in France Central as requested
-  sku_name = "FC1"
-  
+
+  # SKU: Y1 = Consumption Plan - Most cost-effective serverless plan
+  # Changed from FC1 to Y1 for better compatibility with Azure for Students
+  sku_name = "Y1"
+
   tags = merge(local.common_tags, {
     Component = "App Service Plan"
-    Purpose   = "Azure Functions Hosting - Flex Consumption"
+    Purpose   = "Azure Functions Hosting - Consumption Plan"
   })
 }
 

@@ -57,8 +57,8 @@ resource "azurerm_data_factory_linked_service_web" "irail_functions_http" {
 
 # Dataset for HTTP responses (optional - for monitoring)
 resource "azurerm_data_factory_dataset_http" "irail_api_response" {
-  name            = "ds_irail_api_response"
-  data_factory_id = azurerm_data_factory.irail_data_factory.id
+  name                = "ds_irail_api_response"
+  data_factory_id     = azurerm_data_factory.irail_data_factory.id
   linked_service_name = azurerm_data_factory_linked_service_web.irail_functions_http.name
 
   # Schema for the response (JSON)

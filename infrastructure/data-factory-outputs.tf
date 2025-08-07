@@ -11,16 +11,16 @@ output "data_factory_info" {
   value = {
     name                = azurerm_data_factory.irail_data_factory.name
     resource_group_name = azurerm_data_factory.irail_data_factory.resource_group_name
-    location           = azurerm_data_factory.irail_data_factory.location
-    id                 = azurerm_data_factory.irail_data_factory.id
-    
+    location            = azurerm_data_factory.irail_data_factory.location
+    id                  = azurerm_data_factory.irail_data_factory.id
+
     # Management URLs
     management_url = "https://adf.azure.com/en/home?factory=${azurerm_data_factory.irail_data_factory.name}&resourceGroup=${azurerm_data_factory.irail_data_factory.resource_group_name}"
     monitoring_url = "https://adf.azure.com/en/monitoring/pipelineruns?factory=${azurerm_data_factory.irail_data_factory.name}&resourceGroup=${azurerm_data_factory.irail_data_factory.resource_group_name}"
-    
+
     # Identity information
     managed_identity_principal_id = azurerm_data_factory.irail_data_factory.identity[0].principal_id
-    
+
     # Network configuration
     public_network_enabled = azurerm_data_factory.irail_data_factory.public_network_enabled
   }
@@ -53,25 +53,25 @@ output "data_factory_monitoring" {
   description = "Monitoring and logging configuration for Data Factory"
   value = {
     log_analytics_workspace = {
-      name                = azurerm_log_analytics_workspace.data_factory_logs.name
-      workspace_id        = azurerm_log_analytics_workspace.data_factory_logs.workspace_id
-      retention_in_days   = azurerm_log_analytics_workspace.data_factory_logs.retention_in_days
+      name              = azurerm_log_analytics_workspace.data_factory_logs.name
+      workspace_id      = azurerm_log_analytics_workspace.data_factory_logs.workspace_id
+      retention_in_days = azurerm_log_analytics_workspace.data_factory_logs.retention_in_days
     }
-    
+
     # Direct links to monitoring dashboards
     monitoring_links = {
-      pipeline_runs    = "https://portal.azure.com/#@/resource${azurerm_data_factory.irail_data_factory.id}/pipelineruns"
-      trigger_runs     = "https://portal.azure.com/#@/resource${azurerm_data_factory.irail_data_factory.id}/triggerruns"
-      activity_runs    = "https://portal.azure.com/#@/resource${azurerm_data_factory.irail_data_factory.id}/activityruns"
-      log_analytics    = "https://portal.azure.com/#@/resource${azurerm_log_analytics_workspace.data_factory_logs.id}/logs"
+      pipeline_runs = "https://portal.azure.com/#@/resource${azurerm_data_factory.irail_data_factory.id}/pipelineruns"
+      trigger_runs  = "https://portal.azure.com/#@/resource${azurerm_data_factory.irail_data_factory.id}/triggerruns"
+      activity_runs = "https://portal.azure.com/#@/resource${azurerm_data_factory.irail_data_factory.id}/activityruns"
+      log_analytics = "https://portal.azure.com/#@/resource${azurerm_log_analytics_workspace.data_factory_logs.id}/logs"
     }
-    
+
     # Useful KQL queries for monitoring
     useful_queries = {
       failed_pipeline_runs = "ADFPipelineRun | where Status == 'Failed' | order by TimeGenerated desc"
       trigger_run_summary  = "ADFTriggerRun | summarize count() by TriggerName, Status | order by TriggerName"
       activity_performance = "ADFActivityRun | where TimeGenerated > ago(24h) | summarize avg(Duration) by ActivityName"
-      error_analysis      = "ADFPipelineRun | where Status == 'Failed' | project TimeGenerated, PipelineName, Parameters, Error"
+      error_analysis       = "ADFPipelineRun | where Status == 'Failed' | project TimeGenerated, PipelineName, Parameters, Error"
     }
   }
 }
@@ -85,12 +85,12 @@ output "data_factory_connections" {
       url  = "https://irail-functions-simple.azurewebsites.net"
       type = "HTTP"
     }
-    
+
     # REST API endpoints for external monitoring
     rest_api_endpoints = {
-      base_url           = "https://management.azure.com/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${azurerm_data_factory.irail_data_factory.resource_group_name}/providers/Microsoft.DataFactory/factories/${azurerm_data_factory.irail_data_factory.name}"
-      pipeline_runs      = "https://management.azure.com/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${azurerm_data_factory.irail_data_factory.resource_group_name}/providers/Microsoft.DataFactory/factories/${azurerm_data_factory.irail_data_factory.name}/pipelineruns"
-      trigger_runs       = "https://management.azure.com/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${azurerm_data_factory.irail_data_factory.resource_group_name}/providers/Microsoft.DataFactory/factories/${azurerm_data_factory.irail_data_factory.name}/triggerruns"
+      base_url      = "https://management.azure.com/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${azurerm_data_factory.irail_data_factory.resource_group_name}/providers/Microsoft.DataFactory/factories/${azurerm_data_factory.irail_data_factory.name}"
+      pipeline_runs = "https://management.azure.com/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${azurerm_data_factory.irail_data_factory.resource_group_name}/providers/Microsoft.DataFactory/factories/${azurerm_data_factory.irail_data_factory.name}/pipelineruns"
+      trigger_runs  = "https://management.azure.com/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${azurerm_data_factory.irail_data_factory.resource_group_name}/providers/Microsoft.DataFactory/factories/${azurerm_data_factory.irail_data_factory.name}/triggerruns"
     }
   }
 }
@@ -106,18 +106,18 @@ output "data_factory_operations" {
       start_trigger      = "az datafactory trigger start --factory-name ${azurerm_data_factory.irail_data_factory.name} --resource-group ${azurerm_data_factory.irail_data_factory.resource_group_name} --name ${azurerm_data_factory_trigger_schedule.irail_collection_trigger.name}"
       stop_trigger       = "az datafactory trigger stop --factory-name ${azurerm_data_factory.irail_data_factory.name} --resource-group ${azurerm_data_factory.irail_data_factory.resource_group_name} --name ${azurerm_data_factory_trigger_schedule.irail_collection_trigger.name}"
     }
-    
+
     # PowerShell commands
     powershell_commands = {
       list_pipeline_runs = "Get-AzDataFactoryV2PipelineRun -DataFactoryName '${azurerm_data_factory.irail_data_factory.name}' -ResourceGroupName '${azurerm_data_factory.irail_data_factory.resource_group_name}'"
       trigger_pipeline   = "Invoke-AzDataFactoryV2Pipeline -DataFactoryName '${azurerm_data_factory.irail_data_factory.name}' -ResourceGroupName '${azurerm_data_factory.irail_data_factory.resource_group_name}' -PipelineName '${azurerm_data_factory_pipeline.irail_train_data_collection.name}'"
     }
-    
+
     # Curl commands for manual testing
     curl_commands = {
       test_health_endpoint = "curl -X GET 'https://irail-functions-simple.azurewebsites.net/api/health' -H 'Content-Type: application/json' -H 'User-Agent: Azure-Data-Factory-Test'"
       test_data_collection = "curl -X GET 'https://irail-functions-simple.azurewebsites.net/api/powerbi-data' -H 'Content-Type: application/json' -H 'User-Agent: Azure-Data-Factory-Test'"
-      check_analytics     = "curl -X GET 'https://irail-functions-simple.azurewebsites.net/api/analytics' -H 'Content-Type: application/json' -H 'User-Agent: Azure-Data-Factory-Test'"
+      check_analytics      = "curl -X GET 'https://irail-functions-simple.azurewebsites.net/api/analytics' -H 'Content-Type: application/json' -H 'User-Agent: Azure-Data-Factory-Test'"
     }
   }
 }
@@ -127,28 +127,28 @@ output "data_factory_summary" {
   description = "Quick summary of the Data Factory deployment"
   value = {
     status = "✅ Data Factory deployed successfully"
-    
+
     key_features = [
       "🕐 Automated data collection every 5 minutes",
-      "🔄 Robust retry mechanisms and error handling", 
+      "🔄 Robust retry mechanisms and error handling",
       "📊 Comprehensive monitoring and logging",
       "🚄 Multiple pipeline strategies (main + enhanced)",
       "⚡ Real-time triggers and scheduling",
       "🛡️ Built-in health checks and validation"
     ]
-    
+
     next_steps = [
       "1. Visit the Data Factory Studio: ${azurerm_data_factory.irail_data_factory.name}",
       "2. Monitor pipeline runs in Azure Portal",
-      "3. Check Log Analytics for detailed logs", 
+      "3. Check Log Analytics for detailed logs",
       "4. Validate data collection in your SQL database",
       "5. Enable enhanced collection trigger if needed"
     ]
-    
+
     important_urls = {
-      data_factory_studio = "https://adf.azure.com/en/home?factory=${azurerm_data_factory.irail_data_factory.name}&resourceGroup=${azurerm_data_factory.irail_data_factory.resource_group_name}"
+      data_factory_studio  = "https://adf.azure.com/en/home?factory=${azurerm_data_factory.irail_data_factory.name}&resourceGroup=${azurerm_data_factory.irail_data_factory.resource_group_name}"
       monitoring_dashboard = "https://portal.azure.com/#@/resource${azurerm_data_factory.irail_data_factory.id}/overview"
-      log_analytics = "https://portal.azure.com/#@/resource${azurerm_log_analytics_workspace.data_factory_logs.id}/logs"
+      log_analytics        = "https://portal.azure.com/#@/resource${azurerm_log_analytics_workspace.data_factory_logs.id}/logs"
     }
   }
 }

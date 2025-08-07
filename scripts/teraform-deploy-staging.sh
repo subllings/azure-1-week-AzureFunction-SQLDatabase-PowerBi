@@ -3,13 +3,30 @@
 # Deploy Staging Environment Only
 # Script to deploy only the staging environment
 # =============================================================================
-# chmod +x ./scripts/deploy-staging.sh
-# ./scripts/deploy-staging.sh
+# chmod +x ./scripts/teraform-deploy-staging.sh
+# ./scripts/teraform-deploy-staging.sh
 
 set -e  # Exit on any error
 
+# Function to detect PowerShell 7 and set terraform command
+setup_terraform_command() {
+    if command -v pwsh &> /dev/null; then
+        echo "✓ PowerShell 7 detected - using explicit terraform commands"
+        TERRAFORM_CMD="terraform"
+    else
+        echo "✓ Using standard terraform commands"
+        TERRAFORM_CMD="terraform"
+    fi
+    
+    # Always use explicit terraform command for clarity
+    export TERRAFORM_CMD="terraform"
+}
+
 echo "Deploy STAGING environment only"
 echo "=============================="
+
+# Setup terraform command with PowerShell 7 detection
+setup_terraform_command
 
 # Check if we're in the right directory
 if [ ! -f "infrastructure/main.tf" ]; then
@@ -41,22 +58,22 @@ else
 fi
 
 # Check if Terraform is installed
-if ! command -v terraform &> /dev/null; then
+if ! command -v $TERRAFORM_CMD &> /dev/null; then
     echo "Terraform is not installed. Install it from: https://www.terraform.io/downloads.html"
     echo "or choco install terraform"
     exit 1
 fi
 
-echo "Terraform found"
+echo "Terraform found ($TERRAFORM_CMD)"
 
 # Note: SQL password is configured in staging.tfvars file or .env file
 echo "Using SQL password from configuration files"
 
 echo "Initializing Terraform..."
-terraform init
+$TERRAFORM_CMD init
 
 echo "Planning staging deployment..."
-terraform plan -var-file="staging.tfvars" -out="staging.tfplan"
+$TERRAFORM_CMD plan -var-file="staging.tfvars" -out="staging.tfplan"
 
 echo "Deployment plan generated. Do you want to continue?"
 read -p "Type 'yes' to deploy staging: " CONFIRM
@@ -67,7 +84,7 @@ if [ "$CONFIRM" != "yes" ]; then
 fi
 
 echo "Deploying staging environment..."
-terraform apply "staging.tfplan"
+$TERRAFORM_CMD apply "staging.tfplan"
 
 if [ $? -eq 0 ]; then
     echo "======================="
@@ -75,7 +92,7 @@ if [ $? -eq 0 ]; then
     echo "======================="
     echo ""
     echo "Terraform outputs:"
-    terraform output
+    $TERRAFORM_CMD output
     echo ""
     
     # Now deploy the function code to the newly created infrastructure
@@ -90,7 +107,7 @@ if [ $? -eq 0 ]; then
     get_terraform_output() {
         local output_name=$1
         cd infrastructure
-        terraform output -raw "$output_name" 2>/dev/null || echo ""
+        $TERRAFORM_CMD output -raw "$output_name" 2>/dev/null || echo ""
         cd ..
     }
     

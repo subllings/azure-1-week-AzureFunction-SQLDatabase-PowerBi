@@ -13,16 +13,16 @@ resource "azurerm_mssql_server" "irail_sql_server" {
   version                      = "12.0"
   administrator_login          = var.sql_admin_username
   administrator_login_password = var.sql_admin_password
-  
+
   # Security configuration
   minimum_tls_version = "1.2"
-  
+
   # Azure AD integration
   azuread_administrator {
     login_username = azurerm_user_assigned_identity.function_identity.name
     object_id      = azurerm_user_assigned_identity.function_identity.principal_id
   }
-  
+
   tags = merge(local.common_tags, {
     Component = "SQL Server"
     Purpose   = "Train Data Storage"
@@ -35,27 +35,27 @@ resource "azurerm_mssql_database" "irail_database" {
   server_id    = azurerm_mssql_server.irail_sql_server.id
   collation    = "SQL_Latin1_General_CP1_CI_AS"
   license_type = "LicenseIncluded"
-  
+
   # SKU based on environment
   # Basic for staging/development
   # S2 (Standard) for production
   sku_name = var.environment == "production" ? "S2" : "Basic"
-  
+
   # Storage configuration - Basic tier max is 2GB
   max_size_gb = var.environment == "production" ? 250 : 2
-  
+
   # Backup configuration
   short_term_retention_policy {
     retention_days = var.environment == "production" ? 35 : 7
   }
-  
+
   long_term_retention_policy {
     weekly_retention  = var.environment == "production" ? "P12W" : "PT0S"
     monthly_retention = var.environment == "production" ? "P12M" : "PT0S"
     yearly_retention  = var.environment == "production" ? "P5Y" : "PT0S"
-    week_of_year     = var.environment == "production" ? 1 : null
+    week_of_year      = var.environment == "production" ? 1 : null
   }
-  
+
   tags = merge(local.common_tags, {
     Component = "SQL Database"
     Purpose   = "Train Data Storage"
@@ -93,7 +93,7 @@ resource "azurerm_key_vault_secret" "sql_connection_string" {
   name         = "sql-connection-string"
   value        = "Server=tcp:${azurerm_mssql_server.irail_sql_server.fully_qualified_domain_name},1433;Initial Catalog=${azurerm_mssql_database.irail_database.name};Authentication=Active Directory Managed Identity;User Id=${azurerm_user_assigned_identity.function_identity.client_id};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
   key_vault_id = azurerm_key_vault.main.id
-  
+
   depends_on = [
     azurerm_key_vault_access_policy.current
   ]
@@ -104,7 +104,7 @@ resource "azurerm_key_vault_secret" "sql_admin_connection_string" {
   name         = "sql-admin-connection-string"
   value        = "Server=tcp:${azurerm_mssql_server.irail_sql_server.fully_qualified_domain_name},1433;Initial Catalog=${azurerm_mssql_database.irail_database.name};User ID=${var.sql_admin_username};Password=${var.sql_admin_password};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
   key_vault_id = azurerm_key_vault.main.id
-  
+
   depends_on = [
     azurerm_key_vault_access_policy.current
   ]

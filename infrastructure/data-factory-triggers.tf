@@ -26,7 +26,7 @@ resource "azurerm_data_factory_trigger_schedule" "irail_collection_trigger" {
   # Annotations
   annotations = [
     "iRail",
-    "Every 5 Minutes", 
+    "Every 5 Minutes",
     "Automated",
     "Production"
   ]
@@ -36,7 +36,7 @@ resource "azurerm_data_factory_trigger_schedule" "irail_collection_trigger" {
     name = azurerm_data_factory_pipeline.irail_train_data_collection.name
     parameters = {
       "execution_timestamp" = "@trigger().scheduledTime"
-      "max_retries"        = "3"
+      "max_retries"         = "3"
     }
   }
 
@@ -75,12 +75,12 @@ resource "azurerm_data_factory_trigger_schedule" "irail_enhanced_trigger" {
     name = azurerm_data_factory_pipeline.irail_enhanced_collection.name
     parameters = {
       "execution_timestamp" = "@trigger().scheduledTime"
-      "station_limit"      = "10"
+      "station_limit"       = "10"
     }
   }
 
   # Enable the trigger (can be disabled initially)
-  activated = false  # Set to true when you want enhanced collection
+  activated = false # Set to true when you want enhanced collection
 }
 
 # Daily maintenance trigger - executes once per day for cleanup and analysis
@@ -117,10 +117,10 @@ resource "azurerm_data_factory_trigger_schedule" "irail_daily_maintenance" {
 
   # Pipeline to trigger (database analytics)
   pipeline {
-    name = "pipeline_irail_train_data_collection"  # Use main pipeline for now
+    name = "pipeline_irail_train_data_collection" # Use main pipeline for now
     parameters = {
       "execution_timestamp" = "@trigger().scheduledTime"
-      "max_retries"        = "5"
+      "max_retries"         = "5"
     }
   }
 
@@ -159,7 +159,7 @@ resource "azurerm_data_factory_trigger_tumbling_window" "irail_tumbling_window" 
     name = azurerm_data_factory_pipeline.irail_train_data_collection.name
     parameters = {
       "execution_timestamp" = "@trigger().outputs.windowStartTime"
-      "max_retries"        = "3"
+      "max_retries"         = "3"
     }
   }
 
@@ -170,7 +170,7 @@ resource "azurerm_data_factory_trigger_tumbling_window" "irail_tumbling_window" 
   }
 
   # Enable the trigger (disabled by default - choose between schedule or tumbling window)
-  activated = false  # Set to true if you prefer tumbling window over schedule trigger
+  activated = false # Set to true if you prefer tumbling window over schedule trigger
 }
 
 # ============================================================================
@@ -178,28 +178,28 @@ resource "azurerm_data_factory_trigger_tumbling_window" "irail_tumbling_window" 
 # ============================================================================
 
 resource "azurerm_data_factory_trigger_schedule" "irail_function_warmup_trigger" {
-  name          = "trigger_irail_function_warmup_3min"
+  name            = "trigger_irail_function_warmup_3min"
   data_factory_id = azurerm_data_factory.irail_data_factory.id
-  description   = "Triggers function warmup every 3 minutes to prevent cold starts"
-  
+  description     = "Triggers function warmup every 3 minutes to prevent cold starts"
+
   # Every 3 minutes to keep functions warm
   frequency = "Minute"
   interval  = 3
-  
+
   activated = true
-  
+
   # Start immediately
   start_time = "2024-01-01T00:00:00Z"
   time_zone  = "UTC"
-  
+
   pipeline {
     name = azurerm_data_factory_pipeline.irail_function_warmup.name
     parameters = {
       "execution_timestamp" = "@trigger().scheduledTime"
-      "warmup_type"        = "scheduled"
+      "warmup_type"         = "scheduled"
     }
   }
-  
+
   annotations = [
     "iRail",
     "Function Warmup",
@@ -254,22 +254,22 @@ output "data_factory_triggers_info" {
   description = "Information about the Data Factory triggers"
   value = {
     main_trigger = {
-      name        = azurerm_data_factory_trigger_schedule.irail_collection_trigger.name
-      frequency   = "${azurerm_data_factory_trigger_schedule.irail_collection_trigger.frequency} - ${azurerm_data_factory_trigger_schedule.irail_collection_trigger.interval}"
-      activated   = azurerm_data_factory_trigger_schedule.irail_collection_trigger.activated
-      start_time  = azurerm_data_factory_trigger_schedule.irail_collection_trigger.start_time
+      name       = azurerm_data_factory_trigger_schedule.irail_collection_trigger.name
+      frequency  = "${azurerm_data_factory_trigger_schedule.irail_collection_trigger.frequency} - ${azurerm_data_factory_trigger_schedule.irail_collection_trigger.interval}"
+      activated  = azurerm_data_factory_trigger_schedule.irail_collection_trigger.activated
+      start_time = azurerm_data_factory_trigger_schedule.irail_collection_trigger.start_time
     }
     enhanced_trigger = {
-      name        = azurerm_data_factory_trigger_schedule.irail_enhanced_trigger.name
-      frequency   = "${azurerm_data_factory_trigger_schedule.irail_enhanced_trigger.frequency} - ${azurerm_data_factory_trigger_schedule.irail_enhanced_trigger.interval}"
-      activated   = azurerm_data_factory_trigger_schedule.irail_enhanced_trigger.activated
-      start_time  = azurerm_data_factory_trigger_schedule.irail_enhanced_trigger.start_time
+      name       = azurerm_data_factory_trigger_schedule.irail_enhanced_trigger.name
+      frequency  = "${azurerm_data_factory_trigger_schedule.irail_enhanced_trigger.frequency} - ${azurerm_data_factory_trigger_schedule.irail_enhanced_trigger.interval}"
+      activated  = azurerm_data_factory_trigger_schedule.irail_enhanced_trigger.activated
+      start_time = azurerm_data_factory_trigger_schedule.irail_enhanced_trigger.start_time
     }
     daily_maintenance = {
-      name        = azurerm_data_factory_trigger_schedule.irail_daily_maintenance.name
-      frequency   = "${azurerm_data_factory_trigger_schedule.irail_daily_maintenance.frequency} - ${azurerm_data_factory_trigger_schedule.irail_daily_maintenance.interval}"
-      activated   = azurerm_data_factory_trigger_schedule.irail_daily_maintenance.activated
-      start_time  = azurerm_data_factory_trigger_schedule.irail_daily_maintenance.start_time
+      name       = azurerm_data_factory_trigger_schedule.irail_daily_maintenance.name
+      frequency  = "${azurerm_data_factory_trigger_schedule.irail_daily_maintenance.frequency} - ${azurerm_data_factory_trigger_schedule.irail_daily_maintenance.interval}"
+      activated  = azurerm_data_factory_trigger_schedule.irail_daily_maintenance.activated
+      start_time = azurerm_data_factory_trigger_schedule.irail_daily_maintenance.start_time
     }
   }
 }
