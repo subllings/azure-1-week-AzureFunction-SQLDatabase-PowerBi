@@ -71,6 +71,38 @@ URL: https://irail-functions-staging-jsmith-a1b2c3d4.azurewebsites.net
 4. Set project visibility (Private recommended)
 5. Connect your GitHub repository or import code
 
+#### Repository Connection Options
+
+You have two main approaches for connecting your GitHub repository to Azure DevOps:
+
+**Option 1: Import Repository (Recommended for Learning)**
+
+No, you don't need to copy the whole project manually. You can import your existing GitHub repository directly:
+
+1. In your Azure DevOps project, go to **Repos**
+2. Click **Import a repository**
+3. Choose **GitHub** as source
+4. Authenticate with GitHub
+5. Select your repository: `subllings/azure-1-week-AzureFunction-SQLDatabase-PowerBi`
+6. This creates a synchronized copy in Azure DevOps
+
+Benefits:
+- Keeps your GitHub repository as the main source
+- Azure DevOps gets a synchronized copy for CI/CD
+- Changes can be made in either location
+- Full integration with Azure DevOps pipelines
+- Complete Azure DevOps learning experience
+
+**Option 2: Direct GitHub Integration (Modern Approach)**
+
+Use GitHub Actions with Azure DevOps integration:
+1. Create Azure DevOps Project (same as above)
+2. Keep code in GitHub (no copying needed)
+3. Use Azure DevOps for service connections, variable groups, and release management
+4. Use GitHub Actions for CI/CD pipelines
+
+**Recommendation**: Use Option 1 for this learning project as it provides the full Azure DevOps experience and better learning opportunities.
+
 ### 2. Configure Service Connections (Critical Step)
 Navigate to **Project Settings > Service connections** and create:
 
