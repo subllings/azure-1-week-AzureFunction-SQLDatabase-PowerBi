@@ -14,7 +14,8 @@ Real-time data pipeline that collects Belgian train information from the [iRail 
 
 ### High-Level Architecture Diagram
 
-![picture 5](images/57fe9bda3a8e67026e45a775e6968ab14b6eb8a29df5c13a2127d2f4108432b8.png)  
+![picture 9](images/e14a0291005aadaa5ad66598ed1a928ce7779b893dad1de5d7c8921772a58582.png)  
+
 
 
 ### Architecture Components
@@ -491,9 +492,6 @@ az functionapp log tail --name irail-functions-simple --resource-group irail-fun
 ./scripts/Test-IrailFunctions.ps1
 ```
 
-### Complete Documentation
-
-**[Detailed Deployment Guide](DEPLOYMENT.md)**
 
 ---
 
@@ -1160,19 +1158,9 @@ Cost Optimization:
 ```
 
 **Technical Architecture**
-```
-Azure Data Factory Pipeline Flow:
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Scheduler     │───▶│   Data Factory   │───▶│  Azure Function │
-│ (5-min trigger) │    │   Pipeline       │    │   (iRail API)   │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                                │                        │
-                                ▼                        ▼
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│  Log Analytics  │◀───│   Monitoring     │◀───│  SQL Database   │
-│   Workspace     │    │   & Alerting     │    │  (Data Store)   │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-```
+
+![picture 10](images/e14a0291005aadaa5ad66598ed1a928ce7779b893dad1de5d7c8921772a58582.png)  
+
  
 ![picture 0](images/1e304218fcf98659428b840f6256ee188d6b418a142d7f274a3981db8f5c1caf.png)  
 
@@ -1216,6 +1204,45 @@ Cost Control: Predictable vs spike-prone pricing
 ### Implementation
 **PowerBI ipbx file Location**: `./powerbi/` directory
 
+### Required data connections
+
+#### Connection 1: Departures Data
+URL: https://irail-functions-simple.azurewebsites.net/api/powerbi?data_type=departures
+
+![picture 13](images/8eae1966e7c0f5efbfadbdc4da2318048f1567205b4d4f4cf3011f945f3bc03a.png)  
+
+
+#### Connection 2: Stations Data
+URL: https://irail-functions-simple.azurewebsites.net/api/powerbi?data_type=stations
+
+![picture 14](images/2dd4c873913e91ac2a44cceed1d9140230b007023c92977bafba96cdb27fe42d.png)  
+
+
+#### Connection 3: Delays Data
+URL: https://irail-functions-simple.azurewebsites.net/api/powerbi?data_type=delays
+
+![picture 15](images/de6a57c3fea1ebbcd2bb6e8ee2e5eba3a87f06926a8f61e719c589fb38c6fc69.png)  
+
+#### Connection 4: Peak Hours Data
+URL: https://irail-functions-simple.azurewebsites.net/api/powerbi?data_type=peak_hours
+
+![picture 16](images/3a499f4b672225ab20b8bc1939c30c1b43151f45903fdf50ffd0facbbc559bcf.png)  
+
+
+#### Connection 5: Vehicles Data
+
+URL: https://irail-functions-simple.azurewebsites.net/api/powerbi?data_type=vehicles
+
+![picture 21](images/01b83669dce056f717adafa9552eaaeb6070beb8f60a65ac8ab8cd35381bd68c.png)  
+
+
+#### Connection 6: Connections
+
+https://irail-functions-simple.azurewebsites.net/api/powerbi?data_type=connections
+
+![picture 20](images/ec1e0cee0b04bbc0eeab93738c6e4acf974bded08ab28948632486fe4b376f1e.png)  
+
+
 **Data Endpoints for Analytics**
 ```
 /api/powerbi?data_type=departures   - Departure analytics (real-time priority)
@@ -1225,6 +1252,49 @@ Cost Control: Predictable vs spike-prone pricing
 /api/powerbi?data_type=vehicles     - Train type distribution (IC, S1, S2, etc.)
 /api/powerbi?data_type=connections  - Route analytics (station connections)
 ```
+
+### Data lineage
+
+![picture 12](images/63f7fb8fab04b02609e8967ff496bdc42ccba7e9f58855b3bfd4fc55bc1299bd.png)  
+
+### Power BI Dashboard **Refresh Rate**
+
+![picture 18](images/36661431e932c3811dfce989d44b56502546adc28e53de69b0efe363a3aba5fc.png)  
+
+**Power BI License Requirements for Data Refresh**
+
+| License Type | Minimum Refresh Interval | Maximum Daily Refreshes | Scheduled Refresh | Cost |
+|--------------|---------------------------|-------------------------|-------------------|------|
+| **Power BI Free** | Manual only | Manual only | Not available | Free |
+| **Power BI Pro** | 30 minutes | 8 per day | Available | &euro;8.40/user/month |
+| **Power BI Premium** | 15 minutes (or 5 min) | 48 per day |  Available | &euro;16.90/user/month |
+
+**Current Project Limitation**
+
+ **Important Note**: This project uses **Power BI Free**, which means:
+
+- **No automatic scheduled refresh** is available
+- **Manual refresh only** - requires manual intervention every time
+- **Refresh limitation**: Approximately **every 3 hours** based on manual availability
+- **No real-time dashboard** capabilities
+
+**Impact on Train Data Dashboard:**
+```yaml
+Data Freshness: 3+ hours delay (manual refresh required)
+Real-time Monitoring: Not possible with current license
+Automation: No automatic updates
+Business Impact: Limited operational value for real-time train tracking
+```
+
+**Recommended Upgrade Path:**
+- **Power BI Pro**: Enable 30-minute automated refresh (8 times/day)
+- **Power BI Premium**: Enable 15-minute automated refresh (48 times/day)
+- **Cost-Benefit**: &euro;8.40/month for real-time train monitoring capabilities
+
+**Workaround Solutions:**
+1. **Manual refresh** before important meetings/presentations
+2. **Azure Data Factory** already collects data every 5 minutes (ready for upgrade)
+3. **API endpoints** provide real-time data when Power BI is upgraded
 
 ### **Assignment Requirements Implementation**
 
@@ -1252,6 +1322,11 @@ Power BI Components:
 - Real-time clock display
 - Platform assignment tracking
 ```
+URL: https://app.powerbi.com/groups/me/reports/56acc5ad-14e2-4770-bc5a-71bfc5605264/5d50bfdc19a4df9aca04?experience=power-bi
+
+
+![picture 0](images/54359dac0a886b90242ca885ccf8996317fe833243ea26b66e9ee82f7ec14607.png)  
+
 
 ## **2. Delay Monitor**
 ```yaml
@@ -1269,6 +1344,12 @@ Power BI Components:
 - Performance KPIs and benchmarks
 ```
 
+URL : https://app.powerbi.com/groups/me/reports/56acc5ad-14e2-4770-bc5a-71bfc5605264/5750ea19779eb09b2032?experience=power-bi
+
+
+![picture 1](images/68186285827e90ba80cd19f498ad68b1706e1ab226256e5c7aba5e8abe8b86a5.png)  
+
+
 ## **3. Peak Hour Analysis**
 ```yaml
 Assignment Quote: "Show how train traffic and delays vary by time of day or week"
@@ -1284,6 +1365,11 @@ Power BI Components:
 - Traffic volume comparisons
 - Peak hour identification
 ```
+
+URL : https://app.powerbi.com/groups/me/reports/56acc5ad-14e2-4770-bc5a-71bfc5605264/5e28e70f111c005bdd0a?experience=power-bi
+
+
+![picture 11](images/a9720b0481354730b167f0b544b9d06dd9477adb2311f79a085870047df6fcd5.png)  
 
 ## **4. Train Type Distribution**
 ```yaml
@@ -1301,6 +1387,11 @@ Power BI Components:
 - Capacity analysis dashboard
 ```
 
+URL : https://app.powerbi.com/groups/me/reports/56acc5ad-14e2-4770-bc5a-71bfc5605264/42dae40bc490597449c3?experience=power-bi
+
+![picture 19](images/0b6d544ab19b01741cec0883935a8086dbd30a49d4aff54ae32f46cdcd7fd7a1.png)  
+
+
 ## **5. Route Explorer**
 ```yaml
 Assignment Quote: "Let users check travel time and transfer info between two cities"
@@ -1316,6 +1407,9 @@ Power BI Components:
 - Journey time analytics
 - Connection success rates
 ```
+URL: https://app.powerbi.com/groups/me/reports/56acc5ad-14e2-4770-bc5a-71bfc5605264/7ec6187f8dc5ee30e2cb?experience=power-bi
+
+![picture 22](images/da2c15ca56d5377538ca2eb8b6a602f41f990671eba027bc4f1e78e310ed1238.png)  
 
 ## **6. Real-Time Train Map**
 ```yaml
@@ -1572,7 +1666,7 @@ APPLICATION_INSIGHTS_KEY     # Monitoring
 | **Azure Functions** | Complete | 9 endpoints operational |
 | **Azure SQL Database** | Complete | Live data insertion active with Data Factory logging |
 | **Azure Data Factory** | Complete | Automated data collection with comprehensive logging |
-| **Power BI Integration** | Not Implemented | API endpoints ready, dashboard not created |
+| **Power BI Integration** | Not Implemented | API endpoints ready, dashboard created (5 use cases solved)|
 | **Infrastructure Code** | Complete | Terraform deployment ready |
 | **CI/CD Pipeline** | Complete | GitHub Actions configured |
 | **Testing Suite** | Complete | All tests passing |
