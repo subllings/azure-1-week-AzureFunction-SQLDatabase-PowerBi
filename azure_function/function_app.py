@@ -2084,7 +2084,10 @@ def warmup(req: func.HttpRequest) -> func.HttpResponse:
         db_warmup_status = "not_available"
         if PYODBC_AVAILABLE:
             try:
-                db_manager = DatabaseManager()
+                if SQL_CONNECTION_STRING is not None:
+                    db_manager = DatabaseManager(SQL_CONNECTION_STRING)
+                else:
+                    db_manager = None
                 if db_manager and hasattr(db_manager, 'test_connection'):
                     if db_manager.test_connection():
                         db_warmup_status = "connected"
@@ -2199,7 +2202,7 @@ def keep_alive(timer: func.TimerRequest) -> None:
         # Test database if available
         if PYODBC_AVAILABLE:
             try:
-                db_manager = DatabaseManager()
+                db_manager = DatabaseManager(SQL_CONNECTION_STRING)
                 if db_manager and hasattr(db_manager, 'test_connection'):
                     db_status = "connected" if db_manager.test_connection() else "disconnected"
                     logger.info(f"   Database status: {db_status}")
