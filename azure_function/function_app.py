@@ -13,12 +13,19 @@ try:
     PYODBC_AVAILABLE = True
 except ImportError:
     PYODBC_AVAILABLE = False
-    
+
 try:
     import pymssql
     PYMSSQL_AVAILABLE = True
 except ImportError:
     PYMSSQL_AVAILABLE = False
+
+# New: Azure Identity for AAD tokens
+try:
+    from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
+    AZURE_IDENTITY_AVAILABLE = True
+except Exception:
+    AZURE_IDENTITY_AVAILABLE = False
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -101,33 +108,80 @@ class DatabaseManager:
     """Manages database operations with connection pooling."""
     
     def __init__(self, connection_string: str):
-        self.connection_string = connection_string
-    
+        self.connection_string = connection_string or ""
+
+    def _parse_conn(self) -> Dict[str, str]:
+        parts = {}
+        for raw in (self.connection_string or "").split(';'):
+            if not raw:
+                continue
+            if '=' not in raw:
+                continue
+            k, v = raw.split('=', 1)
+            key = k.strip().lower().replace(' ', '')  # normalize: 'User Id' -> 'userid'
+            parts[key] = v.strip()
+        return parts
+
+    def _connect_with_managed_identity(self):
+        # Requires pyodbc and azure-identity
+        if not (PYODBC_AVAILABLE and AZURE_IDENTITY_AVAILABLE):
+            raise Exception("pyodbc/azure-identity not available for MSI auth")
+        p = self._parse_conn()
+        server = p.get('server') or p.get('data source')
+        database = p.get('database') or p.get('initialcatalog')
+        client_id = p.get('clientid') or p.get('userid') or p.get('user id')
+        if not server or not database:
+            raise Exception("Server/Database missing in connection string")
+
+        server_val = server
+        if not server_val.lower().startswith('tcp:'):
+            server_val = f"tcp:{server_val}"
+
+        # Acquire MI token (prefer user-assigned when provided)
+        if client_id:
+            cred = ManagedIdentityCredential(client_id=client_id)
+        else:
+            cred = DefaultAzureCredential(exclude_interactive_browser_credential=True)
+        token = cred.get_token("https://database.windows.net/.default").token
+        token_bytes = token.encode('utf-16-le')
+        SQL_COPT_SS_ACCESS_TOKEN = 1256
+
+        base = f"Server={server_val};Database={database};Encrypt=yes;TrustServerCertificate=no;"
+        candidates = [
+            f"Driver={{ODBC Driver 18 for SQL Server}};{base}",
+            f"Driver={{ODBC Driver 17 for SQL Server}};{base}"
+        ]
+
+        last_err = None
+        for conn_str in candidates:
+            try:
+                logger.info(f"Trying SQL connection via pyodbc with driver candidate: {conn_str.split(';')[0]}")
+                return pyodbc.connect(conn_str, attrs_before={SQL_COPT_SS_ACCESS_TOKEN: token_bytes}, autocommit=True)
+            except Exception as e:
+                last_err = e
+                logger.warning(f"ODBC connect failed with candidate {conn_str.split(';')[0]}: {e}")
+                continue
+        raise Exception(f"ODBC drivers 18/17 not available or connection failed: {last_err}")
+
     def get_connection(self):
-        """Get database connection using available driver."""
+        # Detect MI auth in a normalized way
+        norm = (self.connection_string or '').lower().replace(' ', '')
+        if 'authentication=activedirectorymanagedidentity' in norm or 'authentication=activedirectorymsi' in norm:
+            try:
+                return self._connect_with_managed_identity()
+            except Exception as e:
+                logger.warning(f"MSI token connection failed: {e}")
+        
         if PYODBC_AVAILABLE:
             try:
                 return pyodbc.connect(self.connection_string)
             except Exception as e:
                 logger.warning(f"Failed to connect with pyodbc: {e}")
-                
+        
         if PYMSSQL_AVAILABLE:
             try:
-                # Parse connection string for pymssql
-                parts = self.connection_string.split(';')
-                server = database = uid = pwd = None
-                
-                for part in parts:
-                    if part.startswith('Server='):
-                        server = part.split('=', 1)[1]
-                    elif part.startswith('Database='):
-                        database = part.split('=', 1)[1]
-                    elif part.startswith('Uid='):
-                        uid = part.split('=', 1)[1]
-                    elif part.startswith('Pwd='):
-                        pwd = part.split('=', 1)[1]
-                
-                return pymssql.connect(server=server, database=database, user=uid, password=pwd)
+                p = self._parse_conn()
+                return pymssql.connect(server=p.get('server'), database=p.get('database') or p.get('initialcatalog'), user=p.get('uid'), password=p.get('pwd'))
             except Exception as e:
                 logger.warning(f"Failed to connect with pymssql: {e}")
         
@@ -476,14 +530,24 @@ def get_analytics(req: func.HttpRequest) -> func.HttpResponse:
             cursor.execute(analytics_sql)
             result = cursor.fetchone()
             
-            analytics = {
-                "total_departures": result[0] or 0,
-                "unique_stations": result[1] or 0,
-                "unique_vehicles": result[2] or 0,
-                "avg_delay_seconds": round(result[3] or 0, 2),
-                "canceled_departures": result[4] or 0,
-                "last_update": result[5].isoformat() if result[5] else None
-            }
+            if not result:
+                analytics = {
+                    "total_departures": 0,
+                    "unique_stations": 0,
+                    "unique_vehicles": 0,
+                    "avg_delay_seconds": 0.0,
+                    "canceled_departures": 0,
+                    "last_update": None
+                }
+            else:
+                analytics = {
+                    "total_departures": (result[0] or 0),
+                    "unique_stations": (result[1] or 0),
+                    "unique_vehicles": (result[2] or 0),
+                    "avg_delay_seconds": round((result[3] or 0.0), 2),
+                    "canceled_departures": (result[4] or 0),
+                    "last_update": (result[5].isoformat() if result[5] else None)
+                }
         
         return func.HttpResponse(
             json.dumps({
@@ -530,7 +594,7 @@ def get_powerbi_data(req: func.HttpRequest) -> func.HttpResponse:
                     'scheduled_time': scheduled.isoformat(),
                     'actual_time': actual.isoformat(),
                     'delay_seconds': delay,
-                    'is_canceled': random.choice([True, False]) if random.random() < 0.05 else False,
+                    'is_canceled': random.random() < 0.05,
                     'occupancy_level': random.choice(['low', 'medium', 'high']),
                     'recorded_at': (datetime.utcnow() - pd.Timedelta(minutes=random.randint(0, 60))).isoformat()
                 })
@@ -562,6 +626,45 @@ def get_powerbi_data(req: func.HttpRequest) -> func.HttpResponse:
                         'departure_count': random.randint(50, 200),
                         'date': date.isoformat()
                     })
+        
+        elif data_type == 'peak_hours':
+            # Sample peak hour distribution per station
+            import random
+            stations = ['Brussels-North', 'Brussels-Central', 'Antwerp-Central', 'Gent-Sint-Pieters']
+            sample_data = []
+            for station in stations:
+                for hour in range(24):
+                    sample_data.append({
+                        'station_name': station,
+                        'hour': hour,
+                        'departures': random.randint(0, 120)
+                    })
+        
+        elif data_type == 'vehicles':
+            # Sample vehicle mix
+            import random
+            vehicle_types = ['IC', 'S1', 'S2', 'S3', 'ICE']
+            sample_data = []
+            for vt in vehicle_types:
+                sample_data.append({
+                    'vehicle_type': vt,
+                    'count': random.randint(50, 500)
+                })
+        
+        elif data_type == 'connections':
+            # Sample connections between stations
+            import random
+            stations = ['Brussels-North', 'Brussels-Central', 'Antwerp-Central', 'Gent-Sint-Pieters']
+            sample_data = []
+            for _ in range(50):
+                a, b = random.sample(stations, 2)
+                duration = random.randint(10, 120)
+                sample_data.append({
+                    'from_station': a,
+                    'to_station': b,
+                    'duration_minutes': duration,
+                    'transfers': random.randint(0, 2)
+                })
         else:
             return func.HttpResponse(
                 json.dumps({"status": "error", "message": "Invalid data type"}),
@@ -652,3 +755,41 @@ def trigger_data_refresh(req: func.HttpRequest) -> func.HttpResponse:
             status_code=500,
             mimetype="application/json"
         )
+
+@app.route(route="debug/odbc", methods=["GET"], auth_level=func.AuthLevel.ANONYMOUS)
+def debug_odbc(req: func.HttpRequest) -> func.HttpResponse:
+    """Debug endpoint to report ODBC drivers and identity libs availability."""
+    try:
+        info = {
+            "pyodbc_available": PYODBC_AVAILABLE,
+            "pymssql_available": PYMSSQL_AVAILABLE,
+            "azure_identity_available": AZURE_IDENTITY_AVAILABLE,
+            "python_version": os.getenv('PYTHON_VERSION') or os.popen('python -V 2>&1').read().strip(),
+            "site_name": os.getenv('WEBSITE_SITE_NAME'),
+            "functions_runtime": os.getenv('FUNCTIONS_WORKER_RUNTIME'),
+        }
+        if PYODBC_AVAILABLE:
+            try:
+                import pyodbc as _py
+                info["odbc_drivers"] = _py.drivers()
+            except Exception as e:
+                info["odbc_drivers_error"] = str(e)
+        # Connection string diagnostics (no secrets)
+        cs = (SQL_CONNECTION_STRING or "")
+        norm = cs.lower().replace(' ', '')
+        info["conn_has_msi_auth"] = ('authentication=activedirectorymanagedidentity' in norm) or ('authentication=activedirectorymsi' in norm)
+        # Mask client id
+        client_id = None
+        for part in cs.split(';'):
+            if part.strip().lower().startswith(('user id', 'user id=', 'userid=', 'clientid=')) or part.strip().lower().startswith('clientid='):
+                try:
+                    client_id = part.split('=',1)[1].strip()
+                except Exception:
+                    pass
+        if client_id and len(client_id) > 8:
+            info["client_id_suffix"] = client_id[-8:]
+        else:
+            info["client_id_suffix"] = client_id
+        return func.HttpResponse(json.dumps({"status": "ok", "env": info}), status_code=200, mimetype="application/json")
+    except Exception as e:
+        return func.HttpResponse(json.dumps({"status": "error", "message": str(e)}), status_code=500, mimetype="application/json")
