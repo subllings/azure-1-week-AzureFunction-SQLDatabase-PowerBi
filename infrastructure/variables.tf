@@ -17,6 +17,12 @@ variable "location" {
   default     = "West Europe"
 }
 
+variable "resource_group_name" {
+  description = "Name of the resource group"
+  type        = string
+  default     = ""
+}
+
 variable "sql_admin_username" {
   description = "SQL Server administrator username"
   type        = string

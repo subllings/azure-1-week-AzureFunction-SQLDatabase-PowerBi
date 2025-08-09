@@ -112,6 +112,64 @@ The function includes a timer trigger that runs every 30 minutes:
    - Verify SQL firewall allows Azure services
    - Check SQL authentication credentials
 
+## Power BI Implementation
+
+### PowerBI File Location
+PowerBI `.pbix` file is located in the `./powerbi/` directory.
+
+### Required Data Connections
+
+The Power BI dashboard connects to the Azure Function's PowerBI API endpoint with different data types:
+
+#### Connection 1: Departures Data
+```
+URL: https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=departures
+```
+
+#### Connection 2: Stations Data  
+```
+URL: https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=stations
+```
+
+#### Connection 3: Delays Data
+```
+URL: https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=delays
+```
+
+#### Connection 4: Peak Hours Data
+```
+URL: https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=peak_hours
+```
+
+#### Connection 5: Vehicles Data
+```
+URL: https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=vehicles
+```
+
+#### Connection 6: Connections Data
+```
+URL: https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=connections
+```
+
+### Data Endpoints for Analytics
+
+These URLs provide structured data specifically formatted for Power BI analytics and visualization:
+
+- **Departures**: Real-time and historical departure information
+- **Stations**: Station metadata and usage statistics  
+- **Delays**: Delay patterns and statistics across the network
+- **Peak Hours**: Traffic patterns by time of day and location
+- **Vehicles**: Rolling stock information and utilization
+- **Connections**: Route connectivity and transfer data
+
+### Setting Up Power BI Connections
+
+1. **Open Power BI Desktop**
+2. **Get Data** → **Web** → **Advanced**
+3. **Enter the URL** for each data type above
+4. **Configure refresh settings** for real-time data updates
+5. **Create relationships** between tables based on common fields (station_id, vehicle_id, etc.)
+
 ### Next Steps
 
 1. **Test the Function** - Verify data appears in SQL database

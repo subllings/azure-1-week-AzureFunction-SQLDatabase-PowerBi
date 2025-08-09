@@ -1,10 +1,35 @@
 #!/bin/bash
 
+# =============================================================================
+# TERAFORM-DEPLOY-STAGING-Y1.sh - AZURE FUNCTIONS Y1 CONSUMPTION PLAN
+# =============================================================================
+# 
+# Y1 PLAN : Azure Functions standard        
+# This version deploys Azure Functions using Y1 (Consumption Plan):
+# - Y1 SKU: Standard Consumption Plan (pay-per-execution)
+# - Shared infrastructure with automatic scaling
+# - Python 3.12 runtime support (PYTHON_VERSION=3.12)
+# - Complete infrastructure + Azure Functions code deployment
+# - Automatic deployment package creation
+# - Endpoint testing after deployment
+# 
+# Y1 Plan Features:
+# - Pay-per-execution billing model
+# - Automatic scale in/out based on demand
+# - Cold starts after inactivity periods
+# - No fixed IP or Premium features
+# - 5-10 min max execution time
+# 
+# Best for: Lightweight tasks, event-driven jobs, occasional serverless workloads
+# 
+# =============================================================================
+
 # Deploy Staging Environment Only
 # Script to deploy only the staging environment
 # =============================================================================
-# chmod +x ./scripts/teraform-deploy-staging.sh
-# ./scripts/teraform-deploy-staging.sh
+# chmod +x ./scripts/teraform-deploy-staging-Y1.sh
+# ./scripts/teraform-deploy-staging-Y1.sh
+
 
 set -e  # Exit on any error
 
