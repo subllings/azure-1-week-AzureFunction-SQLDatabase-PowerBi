@@ -6,21 +6,19 @@ import pandas as pd
 import requests
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
-import sys
-import threading
-import time
-
-# Ensure pyodbc symbol exists even if import fails
-pyodbc = None
 
 # Try to import database drivers
 try:
-    import pyodbc as _pyodbc
-    pyodbc = _pyodbc
+    import pyodbc
     PYODBC_AVAILABLE = True
 except ImportError:
     PYODBC_AVAILABLE = False
-    pyodbc = None
+    
+try:
+    import pymssql
+    PYMSSQL_AVAILABLE = True
+except ImportError:
+    PYMSSQL_AVAILABLE = False
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -34,9 +32,9 @@ IRAIL_API_BASE = os.environ.get('IRAIL_API_BASE_URL', 'https://api.irail.be')
 USER_AGENT = os.environ.get('USER_AGENT', 'BeCodeTrainApp/1.0 (student.project@becode.education)')
 SQL_CONNECTION_STRING = os.environ.get('SQL_CONNECTION_STRING')
 
-def get_config(key: str, default: Optional[str] = None) -> Optional[str]:
-    """Small helper to read environment variables with a default."""
-    return os.environ.get(key, default)
+# Helper to resolve requested Power BI data type from query params (new + legacy)
+def _get_powerbi_requested_type(req: func.HttpRequest) -> str:
+    return req.params.get('data_type') or req.params.get('type') or 'departures'
 
 class iRailAPI:
     """iRail API client with rate limiting and error handling."""
@@ -99,114 +97,41 @@ class iRailAPI:
             logger.error(f"Error fetching connections from {from_station} to {to_station}: {e}")
             raise
 
-class ConnectionPool:
-    def __init__(self):
-        self.pool = {}
-        self.last_used = {}
-        self.lock = threading.Lock()
-    
-    def get_session(self, timeout=30):
-        with self.lock:
-            session_id = threading.get_ident()
-            if session_id not in self.pool:
-                session = requests.Session()
-                # Keep connections alive
-                session.headers.update({
-                    'User-Agent': 'BeCodeTrainApp/1.0 (student.project@becode.education)',
-                    'Connection': 'keep-alive',
-                    'Cache-Control': 'no-cache'
-                })
-                self.pool[session_id] = session
-            
-            self.last_used[session_id] = time.time()
-            return self.pool[session_id]
-
 class DatabaseManager:
     """Manages database operations with connection pooling."""
     
-    def __init__(self, connection_string: Optional[str]):
+    def __init__(self, connection_string: str):
         self.connection_string = connection_string
     
     def get_connection(self):
-        """Get database connection using pyodbc with enhanced error handling."""
-        errors = []
-        
-        if not self.connection_string:
-            raise Exception("SQL connection string not configured")
-        
-        # Log driver availability
-        logger.info(f"PYODBC_AVAILABLE: {PYODBC_AVAILABLE}")
-        
-        if PYODBC_AVAILABLE and pyodbc is not None:
-            # First check what drivers are available
-            available_drivers = []
+        """Get database connection using available driver."""
+        if PYODBC_AVAILABLE:
             try:
-                available_drivers = pyodbc.drivers()
-                logger.info(f"Available ODBC drivers: {available_drivers}")
+                return pyodbc.connect(self.connection_string)
             except Exception as e:
-                logger.warning(f"Could not list ODBC drivers: {e}")
-            
-            # Try different connection strings based on available drivers
-            connection_attempts = []
-            
-            # Original connection string
-            connection_attempts.append(self.connection_string)
-            
-            # Try with different ODBC drivers if available
-            if 'ODBC Driver 17 for SQL Server' in available_drivers:
-                alt_conn_str = self.connection_string.replace('Driver={ODBC Driver 18 for SQL Server}', 'Driver={ODBC Driver 17 for SQL Server}')
-                connection_attempts.append(alt_conn_str)
-            
-            # Try with FreeTDS (common in Linux environments)
-            freetds_conn_str = self.connection_string.replace('Driver={ODBC Driver 18 for SQL Server}', 'Driver={FreeTDS}')
-            connection_attempts.append(freetds_conn_str)
-            
-            # Try simplified connection string
-            sql_server = os.environ.get('SQL_SERVER', '')
-            sql_database = os.environ.get('SQL_DATABASE', '')
-            sql_username = os.environ.get('SQL_USERNAME', '')
-            sql_password = os.environ.get('SQL_PASSWORD', '')
-            simple_conn_str = f"DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={sql_server};DATABASE={sql_database};UID={sql_username};PWD={sql_password};Encrypt=yes;TrustServerCertificate=no;Authentication=SqlPassword;Connection Timeout=30;"
-            connection_attempts.append(simple_conn_str)
-            
-            for i, conn_str in enumerate(connection_attempts):
-                try:
-                    logger.info(f"Attempting connection #{i+1} with pyodbc...")
-                    connection = pyodbc.connect(conn_str, timeout=30)
-                    logger.info(f"Successfully connected with pyodbc using connection string #{i+1}")
-                    return connection
-                except Exception as e:
-                    error_msg = f"pyodbc attempt #{i+1} failed: {str(e)}"
-                    errors.append(error_msg)
-                    logger.warning(error_msg)
-        else:
-            error_msg = "pyodbc not available - install pyodbc package"
-            errors.append(error_msg)
-            logger.error(error_msg)
+                logger.warning(f"Failed to connect with pyodbc: {e}")
+                
+        if PYMSSQL_AVAILABLE:
+            try:
+                # Parse connection string for pymssql
+                parts = self.connection_string.split(';')
+                server = database = uid = pwd = None
+                
+                for part in parts:
+                    if part.startswith('Server='):
+                        server = part.split('=', 1)[1]
+                    elif part.startswith('Database='):
+                        database = part.split('=', 1)[1]
+                    elif part.startswith('Uid='):
+                        uid = part.split('=', 1)[1]
+                    elif part.startswith('Pwd='):
+                        pwd = part.split('=', 1)[1]
+                
+                return pymssql.connect(server=server, database=database, user=uid, password=pwd)
+            except Exception as e:
+                logger.warning(f"Failed to connect with pymssql: {e}")
         
-        # Detailed error logging
-        full_error = f"Database connection failed. Errors: {'; '.join(errors)}"
-        logger.error(full_error)
-        logger.error(f"Connection string length: {len(self.connection_string)}")
-        logger.error(f"Python version: {sys.version}")
-        
-        raise Exception(full_error)
-
-    def test_connection(self) -> bool:
-        """Lightweight connection test that returns True/False without raising."""
-        try:
-            with self.get_connection() as conn:
-                try:
-                    # Try a no-op query
-                    conn.execute("SELECT 1")
-                except Exception:
-                    # Some drivers require cursor
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT 1")
-                return True
-        except Exception as e:
-            logger.debug(f"Database connection test failed: {e}")
-            return False
+        raise Exception("No working database driver available")
     
     def initialize_tables(self):
         """Create database tables if they don't exist."""
@@ -551,24 +476,14 @@ def get_analytics(req: func.HttpRequest) -> func.HttpResponse:
             cursor.execute(analytics_sql)
             result = cursor.fetchone()
             
-            if not result:
-                analytics = {
-                    "total_departures": 0,
-                    "unique_stations": 0,
-                    "unique_vehicles": 0,
-                    "avg_delay_seconds": 0.0,
-                    "canceled_departures": 0,
-                    "last_update": None
-                }
-            else:
-                analytics = {
-                    "total_departures": result[0] or 0,
-                    "unique_stations": result[1] or 0,
-                    "unique_vehicles": result[2] or 0,
-                    "avg_delay_seconds": round(result[3] or 0, 2),
-                    "canceled_departures": result[4] or 0,
-                    "last_update": result[5].isoformat() if result[5] else None
-                }
+            analytics = {
+                "total_departures": result[0] or 0,
+                "unique_stations": result[1] or 0,
+                "unique_vehicles": result[2] or 0,
+                "avg_delay_seconds": round(result[3] or 0, 2),
+                "canceled_departures": result[4] or 0,
+                "last_update": result[5].isoformat() if result[5] else None
+            }
         
         return func.HttpResponse(
             json.dumps({
@@ -589,9 +504,10 @@ def get_analytics(req: func.HttpRequest) -> func.HttpResponse:
 
 @app.route(route="powerbi-data", methods=["GET"], auth_level=func.AuthLevel.ANONYMOUS)
 def get_powerbi_data(req: func.HttpRequest) -> func.HttpResponse:
-    """Get formatted data for Power BI consumption."""
+    """Get formatted data for Power BI consumption (legacy route)."""
     try:
-        data_type = req.params.get('type', 'departures')
+        # Use unified resolver to accept both data_type (new) and type (legacy)
+        data_type = _get_powerbi_requested_type(req)
         
         # For now, generate sample data to demonstrate Power BI integration
         if data_type == 'departures':
@@ -671,6 +587,12 @@ def get_powerbi_data(req: func.HttpRequest) -> func.HttpResponse:
             status_code=500,
             mimetype="application/json"
         )
+
+# New canonical Power BI endpoint that replaces /api/powerbi-data
+@app.route(route="powerbi", methods=["GET"], auth_level=func.AuthLevel.ANONYMOUS)
+def get_powerbi(req: func.HttpRequest) -> func.HttpResponse:
+    """Canonical Power BI endpoint. Accepts 'data_type' (preferred) or 'type' (legacy)."""
+    return get_powerbi_data(req)
 
 @app.route(route="data-refresh", methods=["POST"], auth_level=func.AuthLevel.ANONYMOUS)
 def trigger_data_refresh(req: func.HttpRequest) -> func.HttpResponse:

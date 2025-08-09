@@ -86,6 +86,27 @@ cd infrastructure
 terraform output
 ```
 
+### About the Y1 (Consumption) plan
+
+The Y1 plan is the Azure Functions Consumption plan SKU. It provides a serverless, cost-efficient execution model suitable for development, testing, and low-to-moderate traffic workloads.
+
+Key characteristics:
+- Billing: Pay per execution, execution time, and memory (GB-s). No fixed monthly instance cost.
+- Scaling: Automatic, event-driven horizontal scale. Instances are added/removed based on load.
+- Cold starts: Functions may experience cold starts after periods of inactivity.
+- Time limits: Default function timeout is 5 minutes for HTTP requests (configurable up to 10 minutes via host.json). For longer-running tasks, use Flex Consumption (FC1) or Premium.
+- Platform: Linux Consumption with ephemeral file system; features like WEBSITE_TIME_ZONE/TZ are not supported.
+- Always On: Not available on Consumption; use FC1 or Premium for Always On behavior.
+
+When to use Y1:
+- Development and staging environments.
+- Cost-sensitive scenarios with bursty or infrequent traffic.
+- Workloads that can tolerate cold starts and short execution windows.
+
+Alternatives:
+- FC1 (Flex Consumption): Faster scaling, reduced cold starts, better for production serverless.
+- Premium (EP1+): Always On, VNET integration at scale, higher throughput, longer timeouts.
+
 ### Current Endpoints
 - Base URL: https://func-irail-dev-i6lr9a.azurewebsites.net
 - Health: `/api/health`
@@ -362,14 +383,15 @@ az functionapp show --name func-irail-dev-i6lr9a --resource-group rg-irail-dev-i
 # Test Function endpoints
 curl https://func-irail-dev-i6lr9a.azurewebsites.net/api/health
 curl https://func-irail-dev-i6lr9a.azurewebsites.net/api/stations
-curl https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi
+curl "https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=stations"
+```
 
-# Check Data Factory pipeline status
-az datafactory pipeline-run query-by-factory \
-  --resource-group rg-irail-dev-i6lr9a \
-  --factory-name df-irail-data-pobm4m \
-  --last-updated-after "2024-01-01" \
-  --last-updated-before "2024-12-31"
+Note: The Power BI endpoint requires the data_type query parameter. Valid values are: departures, stations, delays, peak_hours, vehicles, connections. Examples:
+
+```bash
+curl "https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=departures"
+curl "https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=delays"
+curl "https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=peak_hours"
 ```
 
 ### Deployment Status - Current Environment
@@ -1395,7 +1417,7 @@ terraform force-unlock [LOCK_ID] -force
 az sql db show-connection-string --client ado.net --name [DB_NAME] --server [SERVER_NAME]
 
 # Check Function App status
-az functionapp show --name [FUNCTION_NAME] --resource-group [RG_NAME]
+az functionapp show --name [FUNCTION_APP_NAME] --resource-group [RG_NAME]
 
 # Verify Data Factory triggers
 az datafactory trigger show --factory-name [DF_NAME] --name [TRIGGER_NAME] --resource-group [RG_NAME]

@@ -23,7 +23,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration - Staging Environment (updated)
+# Configuration - Staging Environment (updated to i6lr9a)
 RESOURCE_GROUP="rg-irail-dev-i6lr9a"
 FUNCTION_APP_NAME="func-irail-dev-i6lr9a"
 FUNCTION_APP_URL="https://func-irail-dev-i6lr9a.azurewebsites.net"
@@ -109,6 +109,13 @@ if [ ! -f "$SOURCE_DIR/requirements.txt" ]; then
 fi
 print_success "Requirements file found"
 
+# Ensure host.json exists in the project folder (required by func publish)
+if [ ! -f "$SOURCE_DIR/host.json" ]; then
+    print_error "host.json not found in $SOURCE_DIR (required for Functions project root)"
+    exit 1
+fi
+print_success "host.json found"
+
 echo ""
 
 # Verify Function App exists
@@ -141,13 +148,22 @@ print_success "Dependencies installed"
 print_status "Compiling Python sources to validate syntax"
 BUILD_LOG="build_errors.log"
 rm -f "$BUILD_LOG"
-if ! python -m compileall -q "$SOURCE_DIR" 2> "$BUILD_LOG"; then
-  print_warning "Build failed. Attempting auto-fix by restoring backup if available..."
+# Prefer python if present, else py, else python3
+PY_EXEC="python"
+if ! command -v python &> /dev/null; then
+  if command -v py &> /dev/null; then
+    PY_EXEC="py"
+  elif command -v python3 &> /dev/null; then
+    PY_EXEC="python3"
+  fi
+fi
+if ! "$PY_EXEC" -m compileall -q "$SOURCE_DIR" 2> "$BUILD_LOG"; then
+  print_warning "Compilation failed. Attempting auto-restore from backup if available..."
   if [ -f "$SOURCE_DIR/function_app.py.backup" ]; then
     cp -f "$SOURCE_DIR/function_app.py.backup" "$SOURCE_DIR/function_app.py"
     print_status "Restored function_app.py from backup. Re-compiling..."
     rm -f "$BUILD_LOG"
-    if ! python -m compileall -q "$SOURCE_DIR" 2> "$BUILD_LOG"; then
+    if ! "$PY_EXEC" -m compileall -q "$SOURCE_DIR" 2> "$BUILD_LOG"; then
       print_error "Compilation still failing after restore. Showing errors and aborting."
       echo "--- Build Errors ---" && cat "$BUILD_LOG" || true
       exit 1
@@ -176,7 +192,7 @@ if [ -f "function_app.zip" ]; then
     print_status "Removed existing deployment package"
 fi
 
-# Create deployment ZIP with fallbacks
+# Create deployment ZIP (with Windows-friendly fallbacks)
 print_status "Creating deployment package..."
 if command -v zip &> /dev/null; then
   zip -r function_app.zip . -x "*.git*" "*__pycache__*" "*.pyc" "*.env*" \
@@ -227,15 +243,50 @@ echo "==============================="
 
 print_status "Deploying code to Function App '$FUNCTION_APP_NAME'..."
 
-if az functionapp deployment source config-zip \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$FUNCTION_APP_NAME" \
-    --src "$SOURCE_DIR/function_app.zip" \
-    --timeout 600; then
-    print_success "Function App code deployed successfully"
+# Prefer remote build via Functions Core Tools (Oryx), fallback to ZIP deploy
+if command -v func &> /dev/null; then
+    print_status "Functions Core Tools detected - enabling Oryx remote build settings"
+    az functionapp config appsettings set \
+        --name "$FUNCTION_APP_NAME" \
+        --resource-group "$RESOURCE_GROUP" \
+        --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true ENABLE_ORYX_BUILD=true >/dev/null
+
+    # Remove unsupported timezone settings on Linux Consumption
+    print_status "Removing unsupported timezone settings (WEBSITE_TIME_ZONE, TZ) if present"
+    az functionapp config appsettings delete \
+        --name "$FUNCTION_APP_NAME" \
+        --resource-group "$RESOURCE_GROUP" \
+        --setting-names WEBSITE_TIME_ZONE TZ >/dev/null 2>&1 || true
+
+    print_status "Publishing with remote build (func azure functionapp publish) from $SOURCE_DIR"
+    pushd "$SOURCE_DIR" >/dev/null
+    if func azure functionapp publish "$FUNCTION_APP_NAME" --python --build remote --force; then
+        popd >/dev/null
+        print_success "Function App published successfully via remote build"
+    else
+        popd >/dev/null
+        print_warning "Remote build publish failed, falling back to ZIP deploy"
+        if ! az functionapp deployment source config-zip \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$FUNCTION_APP_NAME" \
+            --src "$SOURCE_DIR/function_app.zip" \
+            --timeout 600; then
+            print_error "Failed to deploy Function App code via ZIP"
+            exit 1
+        fi
+    fi
 else
-    print_error "Failed to deploy Function App code"
-    exit 1
+    print_status "Functions Core Tools not found - using ZIP deploy"
+    if az functionapp deployment source config-zip \
+        --resource-group "$RESOURCE_GROUP" \
+        --name "$FUNCTION_APP_NAME" \
+        --src "$SOURCE_DIR/function_app.zip" \
+        --timeout 600; then
+        print_success "Function App code deployed successfully"
+    else
+        print_error "Failed to deploy Function App code"
+        exit 1
+    fi
 fi
 
 echo ""
@@ -260,17 +311,22 @@ sleep 30
 
 echo ""
 
-# Test Function App endpoints (updated)
+# Test Function App endpoints
 echo -e "${BLUE}Testing Function App Endpoints${NC}"
 echo "=================================="
 
-# Array of endpoints to test
+# Array of endpoints to test (updated: analytics and powerbi with data_type values)
 declare -a endpoints=(
     "/api/health:Health Check"
     "/api/stations:Stations API"
     "/api/liveboard:Liveboard API"
     "/api/analytics:Analytics API"
-    "/api/powerbi:PowerBI API"
+    "/api/powerbi?data_type=stations:PowerBI Stations"
+    "/api/powerbi?data_type=departures:PowerBI Departures"
+    "/api/powerbi?data_type=delays:PowerBI Delays"
+    "/api/powerbi?data_type=peak_hours:PowerBI Peak Hours"
+    "/api/powerbi?data_type=vehicles:PowerBI Vehicles"
+    "/api/powerbi?data_type=connections:PowerBI Connections"
 )
 
 SUCCESS_COUNT=0
@@ -282,6 +338,7 @@ for endpoint_info in "${endpoints[@]}"; do
     
     print_status "Testing $description: $endpoint"
     
+    # Test with timeout and retry logic
     RESPONSE_CODE=0
     for attempt in 1 2 3; do
         if RESPONSE_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$FULL_URL" 2>/dev/null); then
@@ -302,6 +359,7 @@ for endpoint_info in "${endpoints[@]}"; do
     else
         print_error "$description: HTTP $RESPONSE_CODE"
     fi
+
 done
 
 echo ""
@@ -324,7 +382,12 @@ if [ $SUCCESS_COUNT -eq $TOTAL_COUNT ]; then
     echo "- Stations: ${FUNCTION_APP_URL}/api/stations"
     echo "- Liveboard: ${FUNCTION_APP_URL}/api/liveboard"
     echo "- Analytics: ${FUNCTION_APP_URL}/api/analytics"
-    echo "- PowerBI: ${FUNCTION_APP_URL}/api/powerbi"
+    echo "- PowerBI Stations: ${FUNCTION_APP_URL}/api/powerbi?data_type=stations"
+    echo "- PowerBI Departures: ${FUNCTION_APP_URL}/api/powerbi?data_type=departures"
+    echo "- PowerBI Delays: ${FUNCTION_APP_URL}/api/powerbi?data_type=delays"
+    echo "- PowerBI Peak Hours: ${FUNCTION_APP_URL}/api/powerbi?data_type=peak_hours"
+    echo "- PowerBI Vehicles: ${FUNCTION_APP_URL}/api/powerbi?data_type=vehicles"
+    echo "- PowerBI Connections: ${FUNCTION_APP_URL}/api/powerbi?data_type=connections"
     echo ""
     echo "You can now use these endpoints for testing and integration."
     exit 0
