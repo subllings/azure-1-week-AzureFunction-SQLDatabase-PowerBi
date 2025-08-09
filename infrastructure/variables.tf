@@ -58,3 +58,17 @@ variable "github_organization" {
   type        = string
   default     = "becodeorg"
 }
+
+# Optional override for the legacy/demo Data Factory name (kept as-is by default)
+variable "data_factory_name" {
+  description = "Optional explicit name for the Azure Data Factory (legacy/demo)."
+  type        = string
+  default     = ""
+}
+
+# Optional name for the new Data Factory that we deploy alongside the demo one
+variable "data_factory2_name" {
+  description = "Optional explicit name for the NEW Azure Data Factory (v2). Leave empty to autogenerate."
+  type        = string
+  default     = ""
+}

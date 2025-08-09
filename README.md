@@ -485,6 +485,9 @@ az functionapp log tail --name irail-functions-simple --resource-group irail-fun
 # Complete deployment
 ./scripts/deploy-irail-functions.sh
 
+# Deploy Function App (staging Y1)
+./scripts/teraform-deploy-function-staging-Y1.sh
+
 # Automated tests
 ./scripts/test-irail-functions.sh
 
@@ -853,6 +856,7 @@ Tools: Artillery.js for load testing
 Tests: API endpoint performance validation
 Results: Performance metrics uploaded as artifacts
 ```
+
 - Resource state management
 
 Process:
@@ -1164,7 +1168,7 @@ Cost Optimization:
 
 
  
-![picture 0](images/1e304218fcf98659428b840f6256ee188d6b418a142d7f274a3981db8f5c1caf.png)  
+![picture 0](images/1e304218fcf98659428b840f6256ee188d6b418a142d7f274a3981db8f1cacf.png)  
 
 ![picture 4](images/5791517247a3ff742e8165768c499fae647104355f81e5bd32cfe42124f5923c.png)  
 

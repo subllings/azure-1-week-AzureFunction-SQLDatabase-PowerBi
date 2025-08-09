@@ -33,9 +33,13 @@ Azure-DevOps-CICD/
 - **Timeout**: 5 minutes (Y1 limit)
 - **Subscription**: Azure for Students
 
+### Data Factory
+- Using existing factory `df-irail-data-pobm4m` with a 5-minute collection trigger.
+- No new Terraform-managed Data Factory is used in this environment.
+
 ### Production Environment (Future)
 - Purpose: Live production workload
-- Plan Type: Y1 or Y2 (depending on needs)
+- Plan Type: FC1 (Flex Consumption) recommended; Y1 optional for low-cost
 - Function App: func-irail-production-{random-suffix}
 - Resource Group: rg-irail-production-{random-suffix}
 - URL: https://func-irail-production-{random-suffix}.azurewebsites.net
@@ -115,6 +119,8 @@ Alternatives:
 - Analytics: `/api/analytics`
 - PowerBI Data: `/api/powerbi`
 - Collect Data: `/api/collect-data`
+
+Note: Power BI should target `/api/powerbi` (canonical). The legacy `/api/powerbi-data` remains available for backward compatibility.
 
 ## Complete Setup Instructions
 

@@ -82,7 +82,7 @@ output "data_factory_connections" {
   value = {
     linked_service = {
       name = azurerm_data_factory_linked_service_web.irail_functions_http.name
-      url  = "https://irail-functions-simple.azurewebsites.net"
+      url  = "https://${azurerm_linux_function_app.irail_functions.default_hostname}"
       type = "HTTP"
     }
 
@@ -115,9 +115,9 @@ output "data_factory_operations" {
 
     # Curl commands for manual testing
     curl_commands = {
-      test_health_endpoint = "curl -X GET 'https://irail-functions-simple.azurewebsites.net/api/health' -H 'Content-Type: application/json' -H 'User-Agent: Azure-Data-Factory-Test'"
-      test_data_collection = "curl -X GET 'https://irail-functions-simple.azurewebsites.net/api/powerbi-data' -H 'Content-Type: application/json' -H 'User-Agent: Azure-Data-Factory-Test'"
-      check_analytics      = "curl -X GET 'https://irail-functions-simple.azurewebsites.net/api/analytics' -H 'Content-Type: application/json' -H 'User-Agent: Azure-Data-Factory-Test'"
+      test_health_endpoint = "curl -X GET 'https://${azurerm_linux_function_app.irail_functions.default_hostname}/api/health' -H 'Content-Type: application/json' -H 'User-Agent: Azure-Data-Factory-Test'"
+      test_data_collection = "curl -X GET 'https://${azurerm_linux_function_app.irail_functions.default_hostname}/api/powerbi' -H 'Content-Type: application/json' -H 'User-Agent: Azure-Data-Factory-Test'"
+      check_analytics      = "curl -X GET 'https://${azurerm_linux_function_app.irail_functions.default_hostname}/api/analytics' -H 'Content-Type: application/json' -H 'User-Agent: Azure-Data-Factory-Test'"
     }
   }
 }
