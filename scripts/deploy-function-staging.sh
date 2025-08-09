@@ -23,14 +23,14 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration - Staging Environment (updated to i6lr9a)
-RESOURCE_GROUP="rg-irail-dev-i6lr9a"
-FUNCTION_APP_NAME="func-irail-dev-i6lr9a"
-FUNCTION_APP_URL="https://func-irail-dev-i6lr9a.azurewebsites.net"
+# Configuration - Staging Environment
+RESOURCE_GROUP="rg-irail-dev-b7m2sk"
+FUNCTION_APP_NAME="func-irail-dev-b7m2sk"
+FUNCTION_APP_URL="https://func-irail-dev-b7m2sk.azurewebsites.net"
 SOURCE_DIR="azure_function"
 BUILD_DIR="azure_function"
 
-echo -e "${BLUE}Starting Azure Function App Deployment - Staging Environment${NC}"
+echo -e "${BLUE}🚀 Starting Azure Function App Deployment - Staging Environment${NC}"
 echo "=================================================="
 echo "Resource Group: $RESOURCE_GROUP"
 echo "Function App: $FUNCTION_APP_NAME"
@@ -54,24 +54,8 @@ print_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
-# Helper: run pip with fallbacks
-pip_install_requirements() {
-  if command -v python &> /dev/null; then
-    python -m pip install -r "$SOURCE_DIR/requirements.txt"
-    return $?
-  elif command -v py &> /dev/null; then
-    py -m pip install -r "$SOURCE_DIR/requirements.txt"
-    return $?
-  elif command -v python3 &> /dev/null; then
-    python3 -m pip install -r "$SOURCE_DIR/requirements.txt"
-    return $?
-  else
-    return 127
-  fi
-}
-
 # Check prerequisites
-echo -e "${BLUE}Checking Prerequisites${NC}"
+echo -e "${BLUE}🔍 Checking Prerequisites${NC}"
 echo "================================"
 
 # Check if Azure CLI is installed
@@ -109,17 +93,10 @@ if [ ! -f "$SOURCE_DIR/requirements.txt" ]; then
 fi
 print_success "Requirements file found"
 
-# Ensure host.json exists in the project folder (required by func publish)
-if [ ! -f "$SOURCE_DIR/host.json" ]; then
-    print_error "host.json not found in $SOURCE_DIR (required for Functions project root)"
-    exit 1
-fi
-print_success "host.json found"
-
 echo ""
 
 # Verify Function App exists
-echo -e "${BLUE}Verifying Function App Infrastructure${NC}"
+echo -e "${BLUE}🔍 Verifying Function App Infrastructure${NC}"
 echo "============================================="
 
 if ! az functionapp show --name "$FUNCTION_APP_NAME" --resource-group "$RESOURCE_GROUP" &> /dev/null; then
@@ -135,53 +112,8 @@ print_status "Current Function App status: $FUNCTION_STATUS"
 
 echo ""
 
-# ---------------------------
-# Build step (compile check)
-# ---------------------------
-print_status "Installing Python dependencies (local)"
-if ! pip_install_requirements; then
-  print_error "Failed to install Python dependencies"
-  exit 1
-fi
-print_success "Dependencies installed"
-
-print_status "Compiling Python sources to validate syntax"
-BUILD_LOG="build_errors.log"
-rm -f "$BUILD_LOG"
-# Prefer python if present, else py, else python3
-PY_EXEC="python"
-if ! command -v python &> /dev/null; then
-  if command -v py &> /dev/null; then
-    PY_EXEC="py"
-  elif command -v python3 &> /dev/null; then
-    PY_EXEC="python3"
-  fi
-fi
-if ! "$PY_EXEC" -m compileall -q "$SOURCE_DIR" 2> "$BUILD_LOG"; then
-  print_warning "Compilation failed. Attempting auto-restore from backup if available..."
-  if [ -f "$SOURCE_DIR/function_app.py.backup" ]; then
-    cp -f "$SOURCE_DIR/function_app.py.backup" "$SOURCE_DIR/function_app.py"
-    print_status "Restored function_app.py from backup. Re-compiling..."
-    rm -f "$BUILD_LOG"
-    if ! "$PY_EXEC" -m compileall -q "$SOURCE_DIR" 2> "$BUILD_LOG"; then
-      print_error "Compilation still failing after restore. Showing errors and aborting."
-      echo "--- Build Errors ---" && cat "$BUILD_LOG" || true
-      exit 1
-    fi
-    print_success "Compilation succeeded after restore"
-  else
-    print_error "No backup available for auto-fix. Showing errors and aborting."
-    echo "--- Build Errors ---" && cat "$BUILD_LOG" || true
-    exit 1
-  fi
-else
-  print_success "Compilation succeeded"
-fi
-
-echo ""
-
 # Prepare deployment package
-echo -e "${BLUE}Preparing Deployment Package${NC}"
+echo -e "${BLUE}📦 Preparing Deployment Package${NC}"
 echo "=================================="
 
 cd "$BUILD_DIR"
@@ -192,42 +124,13 @@ if [ -f "function_app.zip" ]; then
     print_status "Removed existing deployment package"
 fi
 
-# Create deployment ZIP (with Windows-friendly fallbacks)
+# Create deployment ZIP
 print_status "Creating deployment package..."
-if command -v zip &> /dev/null; then
-  zip -r function_app.zip . -x "*.git*" "*__pycache__*" "*.pyc" "*.env*" \
-     ".venv/*" ".python_packages/*" "*.zip" >/dev/null
-elif command -v 7z &> /dev/null; then
-  7z a -tzip function_app.zip . -xr!*.git* -xr!__pycache__ -xr!*.pyc -xr!*.env* -xr!.venv -xr!.python_packages -xr!*.zip >/dev/null
-elif command -v pwsh &> /dev/null; then
-  pwsh -NoProfile -Command "Compress-Archive -Path * -DestinationPath function_app.zip -Force"
-elif command -v powershell.exe &> /dev/null; then
-  powershell.exe -NoProfile -Command "Compress-Archive -Path * -DestinationPath function_app.zip -Force"
-else
-  print_error "No zip utility found. Install 'zip' or '7z', or ensure PowerShell is available."
-  exit 1
-fi
+zip -r function_app.zip . -x "*.git*" "*__pycache__*" "*.pyc" "*.env*" ".venv/*" ".python_packages/*" "*.zip"
 
 if [ -f "function_app.zip" ]; then
-    if command -v du &> /dev/null; then
-      ZIP_SIZE=$(du -h function_app.zip | cut -f1)
-      print_success "Deployment package created: function_app.zip ($ZIP_SIZE)"
-    elif command -v stat &> /dev/null; then
-      ZIP_SIZE=$(stat -c%s function_app.zip 2>/dev/null || stat -f%z function_app.zip 2>/dev/null || echo "")
-      if [ -n "$ZIP_SIZE" ]; then
-        print_success "Deployment package created: function_app.zip (${ZIP_SIZE} bytes)"
-      else
-        print_success "Deployment package created: function_app.zip"
-      fi
-    elif command -v pwsh &> /dev/null; then
-      SIZE=$(pwsh -NoProfile -Command "(Get-Item 'function_app.zip').Length")
-      print_success "Deployment package created: function_app.zip (${SIZE} bytes)"
-    elif command -v powershell.exe &> /dev/null; then
-      SIZE=$(powershell.exe -NoProfile -Command "(Get-Item 'function_app.zip').Length")
-      print_success "Deployment package created: function_app.zip (${SIZE} bytes)"
-    else
-      print_success "Deployment package created: function_app.zip"
-    fi
+    ZIP_SIZE=$(du -h function_app.zip | cut -f1)
+    print_success "Deployment package created: function_app.zip ($ZIP_SIZE)"
 else
     print_error "Failed to create deployment package"
     exit 1
@@ -238,61 +141,26 @@ cd ..
 echo ""
 
 # Deploy Function App
-echo -e "${BLUE}Deploying Function App Code${NC}"
+echo -e "${BLUE}🚀 Deploying Function App Code${NC}"
 echo "==============================="
 
 print_status "Deploying code to Function App '$FUNCTION_APP_NAME'..."
 
-# Prefer remote build via Functions Core Tools (Oryx), fallback to ZIP deploy
-if command -v func &> /dev/null; then
-    print_status "Functions Core Tools detected - enabling Oryx remote build settings"
-    az functionapp config appsettings set \
-        --name "$FUNCTION_APP_NAME" \
-        --resource-group "$RESOURCE_GROUP" \
-        --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true ENABLE_ORYX_BUILD=true >/dev/null
-
-    # Remove unsupported timezone settings on Linux Consumption
-    print_status "Removing unsupported timezone settings (WEBSITE_TIME_ZONE, TZ) if present"
-    az functionapp config appsettings delete \
-        --name "$FUNCTION_APP_NAME" \
-        --resource-group "$RESOURCE_GROUP" \
-        --setting-names WEBSITE_TIME_ZONE TZ >/dev/null 2>&1 || true
-
-    print_status "Publishing with remote build (func azure functionapp publish) from $SOURCE_DIR"
-    pushd "$SOURCE_DIR" >/dev/null
-    if func azure functionapp publish "$FUNCTION_APP_NAME" --python --build remote --force; then
-        popd >/dev/null
-        print_success "Function App published successfully via remote build"
-    else
-        popd >/dev/null
-        print_warning "Remote build publish failed, falling back to ZIP deploy"
-        if ! az functionapp deployment source config-zip \
-            --resource-group "$RESOURCE_GROUP" \
-            --name "$FUNCTION_APP_NAME" \
-            --src "$SOURCE_DIR/function_app.zip" \
-            --timeout 600; then
-            print_error "Failed to deploy Function App code via ZIP"
-            exit 1
-        fi
-    fi
+if az functionapp deployment source config-zip \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$FUNCTION_APP_NAME" \
+    --src "$SOURCE_DIR/function_app.zip" \
+    --timeout 600; then
+    print_success "Function App code deployed successfully"
 else
-    print_status "Functions Core Tools not found - using ZIP deploy"
-    if az functionapp deployment source config-zip \
-        --resource-group "$RESOURCE_GROUP" \
-        --name "$FUNCTION_APP_NAME" \
-        --src "$SOURCE_DIR/function_app.zip" \
-        --timeout 600; then
-        print_success "Function App code deployed successfully"
-    else
-        print_error "Failed to deploy Function App code"
-        exit 1
-    fi
+    print_error "Failed to deploy Function App code"
+    exit 1
 fi
 
 echo ""
 
 # Wait for deployment to complete
-echo -e "${BLUE}Waiting for Deployment to Complete${NC}"
+echo -e "${BLUE}⏳ Waiting for Deployment to Complete${NC}"
 echo "======================================"
 
 print_status "Waiting 30 seconds for Function App to initialize..."
@@ -312,21 +180,15 @@ sleep 30
 echo ""
 
 # Test Function App endpoints
-echo -e "${BLUE}Testing Function App Endpoints${NC}"
+echo -e "${BLUE}🧪 Testing Function App Endpoints${NC}"
 echo "=================================="
 
-# Array of endpoints to test (updated: analytics and powerbi with data_type values)
+# Array of endpoints to test
 declare -a endpoints=(
     "/api/health:Health Check"
     "/api/stations:Stations API"
-    "/api/liveboard?station=BE.NMBS.008812005:Liveboard API"
-    "/api/analytics:Analytics API"
-    "/api/powerbi?data_type=stations:PowerBI Stations"
-    "/api/powerbi?data_type=departures:PowerBI Departures"
-    "/api/powerbi?data_type=delays:PowerBI Delays"
-    "/api/powerbi?data_type=peak_hours:PowerBI Peak Hours"
-    "/api/powerbi?data_type=vehicles:PowerBI Vehicles"
-    "/api/powerbi?data_type=connections:PowerBI Connections"
+    "/api/connections:Connections API"  
+    "/api/liveboard:Liveboard API"
 )
 
 SUCCESS_COUNT=0
@@ -338,6 +200,7 @@ for endpoint_info in "${endpoints[@]}"; do
     
     print_status "Testing $description: $endpoint"
     
+    # Test with timeout and retry logic
     RESPONSE_CODE=0
     for attempt in 1 2 3; do
         if RESPONSE_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$FULL_URL" 2>/dev/null); then
@@ -350,13 +213,6 @@ for endpoint_info in "${endpoints[@]}"; do
         fi
     done
     
-    # Treat Analytics 500 as acceptable (DB may be initializing or using MSI/ODBC not available in sandbox)
-    if [[ "$description" == "Analytics API" && "$RESPONSE_CODE" -eq 500 ]]; then
-        print_warning "$description: Expected 500 (DB not ready)"
-        ((SUCCESS_COUNT++))
-        continue
-    fi
-
     if [ "$RESPONSE_CODE" -eq 200 ]; then
         print_success "$description: OK (HTTP $RESPONSE_CODE)"
         ((SUCCESS_COUNT++))
@@ -365,13 +221,12 @@ for endpoint_info in "${endpoints[@]}"; do
     else
         print_error "$description: HTTP $RESPONSE_CODE"
     fi
-
 done
 
 echo ""
 
 # Final deployment report
-echo -e "${BLUE}Deployment Summary${NC}"
+echo -e "${BLUE}📊 Deployment Summary${NC}"
 echo "====================="
 echo "Function App: $FUNCTION_APP_NAME"
 echo "Resource Group: $RESOURCE_GROUP"
@@ -380,26 +235,20 @@ echo "Endpoints tested: $SUCCESS_COUNT/$TOTAL_COUNT successful"
 
 if [ $SUCCESS_COUNT -eq $TOTAL_COUNT ]; then
     echo ""
-    print_success "Deployment completed successfully!"
+    print_success "🎉 Deployment completed successfully!"
     print_success "All endpoints are responding correctly"
     echo ""
     echo "Available endpoints:"
     echo "- Health Check: ${FUNCTION_APP_URL}/api/health"
     echo "- Stations: ${FUNCTION_APP_URL}/api/stations"
+    echo "- Connections: ${FUNCTION_APP_URL}/api/connections"
     echo "- Liveboard: ${FUNCTION_APP_URL}/api/liveboard"
-    echo "- Analytics: ${FUNCTION_APP_URL}/api/analytics"
-    echo "- PowerBI Stations: ${FUNCTION_APP_URL}/api/powerbi?data_type=stations"
-    echo "- PowerBI Departures: ${FUNCTION_APP_URL}/api/powerbi?data_type=departures"
-    echo "- PowerBI Delays: ${FUNCTION_APP_URL}/api/powerbi?data_type=delays"
-    echo "- PowerBI Peak Hours: ${FUNCTION_APP_URL}/api/powerbi?data_type=peak_hours"
-    echo "- PowerBI Vehicles: ${FUNCTION_APP_URL}/api/powerbi?data_type=vehicles"
-    echo "- PowerBI Connections: ${FUNCTION_APP_URL}/api/powerbi?data_type=connections"
     echo ""
     echo "You can now use these endpoints for testing and integration."
     exit 0
 else
     echo ""
-    print_warning "Deployment completed with issues"
+    print_warning "⚠️  Deployment completed with issues"
     print_warning "$((TOTAL_COUNT - SUCCESS_COUNT)) endpoint(s) failed"
     echo ""
     echo "Troubleshooting steps:"

@@ -14,8 +14,8 @@ Real-time data pipeline that collects Belgian train information from the [iRail 
 
 ### High-Level Architecture Diagram
 
-![picture 5](images/3586c62b7e462a1fe5af0371b8c6873246315bf96707598ae2db73c57b57c3df.png)  
 
+![picture 9](images/bc39c62ddf1a2132acfe11aa2e3a8ac642310533f5181dca6ff70510af4ccd74.png)  
 
 
 ### Architecture Components
@@ -1160,8 +1160,7 @@ Cost Optimization:
 **Technical Architecture**
 
 
-![picture 6](images/3586c62b7e462a1fe5af0371b8c6873246315bf96707598ae2db73c57b57c3df.png)  
-
+![picture 7](images/bc39c62ddf1a2132acfe11aa2e3a8ac642310533f5181dca6ff70510af4ccd74.png)  
 
 
  
