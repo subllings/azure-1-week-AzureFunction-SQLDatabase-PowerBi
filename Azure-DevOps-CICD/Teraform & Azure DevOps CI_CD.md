@@ -37,7 +37,7 @@ Azure-DevOps-CICD/
 - Using Terraform-managed factory `df-irail-data-v2-<suffix>` with a 5-minute collection trigger.
 - Get the exact name from Terraform output `data_factory_info.name`.
 - Direct links (replace <suffix> with your actual suffix):
-  - ADF Studio: https://adf.azure.com/en/home?factory=df-irail-data-v2-<suffix>&resourceGroup=rg-irail-dev-i6lr9a
+  - ADF Studio: https://adf.azure.com/en/home?resourceId=/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.DataFactory/factories/df-irail-data-pobm4m
   - Monitor: https://adf.azure.com/en/monitoring/pipelineruns?factory=df-irail-data-v2-<suffix>&resourceGroup=rg-irail-dev-i6lr9a
 
 ### Production Environment (Future)
@@ -336,13 +336,22 @@ infrastructure/
 ├── app-service-plan.tf        # App Service Plan for Azure Functions
 ├── azure-functions.tf         # Azure Functions App configuration
 ├── sql-server.tf              # SQL Server and Database
-├── data-factory.tf            # Data Factory setup
-├── data-factory-pipeline.tf   # Data collection pipelines
-├── data-factory-triggers.tf   # Automated scheduling
+├── data-factory.tf            # Legacy/initial Data Factory setup
+├── data-factory-pipeline.tf   # Legacy/initial pipelines
+├── data-factory-triggers.tf   # Legacy/initial triggers
 ├── data-factory-outputs.tf    # Data Factory outputs
+├── data-factory2.tf           # Terraform-managed ADF v2 (current)
+├── data-factory2-pipeline.tf  # ADF v2 pipelines (current)
+├── data-factory2-triggers.tf  # ADF v2 triggers (current)
 ├── staging.tfvars             # Staging environment variables
+├── dev.tfvars                 # Dev environment variables
 ├── production.tfvars          # Production environment variables
-└── README.md                  # Infrastructure documentation
+├── terraform.tfvars           # Shared/default variables
+├── README.md                  # Infrastructure documentation
+├── README-ENV.md              # Environment variables docs
+├── .env.template              # Template for local env files
+├── .env.staging               # Current staging env values
+└── (generated) .terraform/, terraform.tfstate*, *.tfplan, tfplan, main.tf.backup
 ```
 
 ### Environment Configurations
@@ -1337,15 +1346,6 @@ terraform force-unlock [LOCK_ID] -force
 
 #### Network Security
 - **Firewall Rules**: SQL Server restricted to Azure services and specific IPs
-- **TLS 1.2**: Minimum encryption for all connections
-- **HTTPS Only**: All Function App endpoints use HTTPS
-
-#### Access Control
-- **RBAC**: Role-based access control for all resources
-- **Least Privilege**: Each service has minimal required permissions
-- **Audit Logging**: All resource changes logged via Activity Log
-
-### Infrastructure Monitoring and Alerting
 
 #### Application Insights
 - **Performance Monitoring**: Function execution times and success rates
@@ -1595,16 +1595,8 @@ resource "azurerm_consumption_budget_resource_group" "main" {
     - Vehicles: https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=vehicles
     - Connections: https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=connections
 
-- Azure Data Factory v2 (Terraform-managed):
-  - Get the exact factory name from Terraform:
-    ```bash
-    cd infrastructure
-    terraform output -json | jq -r '.data_factory_info.value.name'
-    ```
-  - Replace <ADF2_NAME> below with the real name:
-    - ADF Studio: https://adf.azure.com/en/home?factory=<ADF2_NAME>&resourceGroup=rg-irail-dev-i6lr9a
-    - Monitor (Studio): https://adf.azure.com/en/monitoring/pipelineruns?factory=<ADF2_NAME>&resourceGroup=rg-irail-dev-i6lr9a
-    - Portal (Overview): https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.DataFactory/factories/<ADF2_NAME>/overview
+- Azure Data Factory v2 (Terraform-managed – Monitor pipeline runs):
+  https://adf.azure.com/en/monitoring/pipelineruns?factory=%2Fsubscriptions%2Fb63db937-8e75-4757-aa10-4571a475c185%2FresourceGroups%2Frg-irail-dev-b7m2sk%2Fproviders%2FMicrosoft.DataFactory%2Ffactories%2Fdf-irail-data-zqlb95
 
 - SQL Server and Database:
   - SQL Server (sql-irail-dev-i6lr9a):
