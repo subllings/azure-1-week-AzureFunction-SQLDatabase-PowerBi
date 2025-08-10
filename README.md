@@ -1402,7 +1402,8 @@ Power BI Components:
 
 URL : https://app.powerbi.com/groups/me/reports/56acc5ad-14e2-4770-bc5a-71bfc5605264/42dae40bc490597449c3?experience=power-bi
 
-![picture 19](images/0b6d544ab19b01741cec0883935a8086dbd30a49d4aff54ae32f46cdcd7fd7a1.png)  
+ ![picture 13](images/4c905a11e047f289533de941d032122ea4e67f61ff910d1122200a1762db09fa.png)  
+
 
 
 ## **5. Route Explorer**
