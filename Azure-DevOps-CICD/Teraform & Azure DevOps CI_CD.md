@@ -37,8 +37,8 @@ Azure-DevOps-CICD/
 - Using Terraform-managed factory `df-irail-data-v2-<suffix>` with a 5-minute collection trigger.
 - Get the exact name from Terraform output `data_factory_info.name`.
 - Direct links (replace <suffix> with your actual suffix):
-  - ADF Studio: https://adf.azure.com/en/home?resourceId=/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.DataFactory/factories/df-irail-data-pobm4m
-  - Monitor: https://adf.azure.com/en/monitoring/pipelineruns?factory=df-irail-data-v2-<suffix>&resourceGroup=rg-irail-dev-i6lr9a
+  - ADF Studio: https://adf.azure.com/en/authoring/pipeline/pipeline_irail_enhanced_collection?factory=%2Fsubscriptions%2Fb63db937-8e75-4757-aa10-4571a475c185%2FresourceGroups%2Frg-irail-dev-b7m2sk%2Fproviders%2FMicrosoft.DataFactory%2Ffactories%2Fdf-irail-data-zqlb95
+  
 
 ### Production Environment (Future)
 - Purpose: Live production workload
@@ -141,6 +141,10 @@ Note: Power BI should target `/api/powerbi` (canonical). The legacy `/api/powerb
 4. Set project visibility (Private recommended)
 5. Connect your GitHub repository or import code
 
+
+
+
+
 #### Repository Connection Options
 
 **Option 1: Import Repository (Recommended)**
@@ -231,6 +235,21 @@ When setting up Azure DevOps pipelines, create these service connections:
 1. **New service connection > Docker Registry**
 2. **Connection name**: `azure-container-registry`  
 3. **Registry**: `criraildevi6lr9a.azurecr.io`
+
+### ACR authentication options (testing choice)
+- We will start with ACR Admin user for quick testing. For production, use an Azure AD Service Principal with AcrPush/AcrPull.
+
+| Feature / Method | "OK to scope at subscription" | ACR Admin user | ACR Service Principal |
+|---|---|---|---|
+| What it's about | Scope of RBAC role assignment | Built-in static username/password for ACR | Azure AD identity with RBAC role for ACR |
+| Level | Subscription-wide | ACR resource only | Flexible (ACR, RG, or subscription) |
+| Security | Depends on role; can be risky if too broad | Weak — shared credentials, no per-user tracking | Strong — per-identity, auditable |
+| Use case | When user/system needs access to many resources in subscription | Quick testing, legacy scripts | Production pipelines, secure automation |
+| Revocation | Remove role at subscription | Disable admin user | Delete/disable SP or remove role |
+
+Tip
+- To fetch ACR admin credentials (if needed): Azure Portal → ACR → Access keys → Admin user.
+- Or via CLI: az acr credential show --name traindataacr1754421294
 
 ### 5. Variable Groups Configuration
 
@@ -386,7 +405,7 @@ curl "https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=peak
 - **Function App**: `func-irail-dev-i6lr9a` - Running
 - **Resource Group**: `rg-irail-dev-i6lr9a` - Active  
 - **SQL Database**: `sqldb-irail-dev` - Online
-- **Data Factory v2**: `<from terraform output data_factory_info.name>` - Pipelines Scheduled
+- **Data Factory v2**: `df-irail-data-zqlb95` - Pipelines Scheduled
 - **Application Insights**: Monitoring Active
 - **Location**: France Central
 - **Plan**: Y1 Consumption (Cost-Optimized)
@@ -981,14 +1000,127 @@ az storage container create \
 
 ### 5. Environment Configuration in Azure DevOps
 
-#### 5.1 Create Environments
+### Complete action list to redeploy the Azure Function via Azure DevOps (project-specific)
+
+Project and direct links
+- Azure DevOps project: https://dev.azure.com/bouman9YvesSchillings/irail
+- Pipelines: https://dev.azure.com/bouman9YvesSchillings/irail/_build?view=pipelines
+- Service connections: https://dev.azure.com/bouman9YvesSchillings/irail/_settings/adminservices
+- Variable groups: https://dev.azure.com/bouman9YvesSchillings/irail/_library?itemType=VariableGroups
+- Environments: https://dev.azure.com/bouman9YvesSchillings/irail/_environments
+
+Prerequisites
+- Azure subscription Contributor on b63db937-8e75-4757-aa10-4571a475c185
+- ACR: traindataacr1754421294 (RG: traindata-app-rg; Admin enabled or AcrPush/AcrPull roles)
+- GitHub repo access: subllings/azure-1-week-AzureFunction-SQLDatabase-PowerBi
+
+Connect the repo to the project
+- Repos → Import/Connect to GitHub repo (branch: main)
+- Confirm pipeline YAML path: /Azure-DevOps-CICD/azure-pipelines.yml
+
+Create service connections (Project Settings → Service connections)
+- Azure Resource Manager
+  - Name: azure-service-connection
+  - Subscription: b63db937-8e75-4757-aa10-4571a475c185
+  - Scope: Subscription or resource group rg-irail-dev-i6lr9a
+  - Enable "Allow all pipelines to use this connection"
+- Docker Registry (ACR)
+  - Name: azure-container-registry
+  - Registry: traindataacr1754421294.azurecr.io
+  - Enable "Allow all pipelines to use this connection"
+  - Admin user: ON (testing choice for this project)
+
+ACR authentication options (testing choice)
+- We will start with ACR Admin user for quick testing. For production, use an Azure AD Service Principal with AcrPush/AcrPull.
+
+| Feature / Method | "OK to scope at subscription" | ACR Admin user | ACR Service Principal |
+|---|---|---|---|
+| What it's about | Scope of RBAC role assignment | Built-in static username/password for ACR | Azure AD identity with RBAC role for ACR |
+| Level | Subscription-wide | ACR resource only | Flexible (ACR, RG, or subscription) |
+| Security | Depends on role; can be risky if too broad | Weak — shared credentials, no per-user tracking | Strong — per-identity, auditable |
+| Use case | When user/system needs access to many resources in subscription | Quick testing, legacy scripts | Production pipelines, secure automation |
+| Revocation | Remove role at subscription | Disable admin user | Delete/disable SP or remove role |
+
+Tip
+- To fetch ACR admin credentials (if needed): Azure Portal → ACR → Access keys → Admin user.
+- Or via CLI: az acr credential show --name traindataacr1754421294
+
+Create variable groups (Pipelines → Library)
+- irail-secrets (mark all as secret)
+  - APPLICATIONINSIGHTS_CONNECTION_STRING
+  - SQL_CONNECTION_STRING
+  - AZURE_WEB_JOBS_STORAGE
+  - ACR_USERNAME (optional if using SP auth)
+  - ACR_PASSWORD (optional if using SP auth)
+- irail-config-current
+  - FUNCTION_APP_NAME=func-irail-dev-i6lr9a
+  - RESOURCE_GROUP_NAME=rg-irail-dev-i6lr9a
+  - AZURE_LOCATION=francecentral
+  - CONTAINER_REGISTRY_NAME=traindataacr1754421294
+  - CONTAINER_IMAGE=traindata-function
+  - CONTAINER_TAG=latest
+  - ENVIRONMENT_NAME=dev
+- terraform-config (only if infra stages run)
+  - TF_VAR_environment=staging
+  - TF_VAR_location=francecentral
+  - TF_VAR_project_name=irail
+  - TF_VAR_subscription_id=b63db937-8e75-4757-aa10-4571a475c185
+  - TF_VAR_sql_admin_username (secret)
+  - TF_VAR_sql_admin_password (secret)
+
+Create environments (Pipelines → Environments)
+- staging
+- production (add Approvals and checks with at least one approver)
+
+Authorize pipeline access
+- Grant pipeline "Use" on service connections and "Read" on variable groups (Authorize on first run)
+- Ensure pipeline has "Use" permission on Environments
+
+Configure pipeline YAML (confirm in /Azure-DevOps-CICD/azure-pipelines.yml)
+- Build stage
+  - Login to ACR
+  - Build Docker image: traindata-function
+  - Tag with $(Build.BuildId) and latest
+  - Push to traindataacr1754421294.azurecr.io
+- Deploy stage
+  - Update Function App container image to traindataacr1754421294.azurecr.io/traindata-function:latest (or build-id)
+  - Option A: AzureWebAppContainer@1 task with appName=$(FUNCTION_APP_NAME)
+  - Option B: az functionapp config container set with image and registry creds
+
+Variables/Variable groups
+- Link irail-secrets and irail-config-current in YAML or pipeline UI
+
+Triggers
+- Enable CI trigger on main (or develop for staging)
+- Optional: PR validation without deploy
+
+Run the pipeline
+- Pipelines → Select your pipeline → Run → Branch: main (or develop)
+- Approve production stage if applicable
+
+Post-deploy validation
+- Function health: https://func-irail-dev-i6lr9a.azurewebsites.net/api/health
+- Logs: Application Insights (Requests/Traces/Exceptions)
+- Container pull: Azure Portal → Function App → Container settings (image/last pull)
+- If using build-id tags, confirm the app uses the new tag
+
+Access and security checks
+- If using ACR admin off: ensure the Function App's identity or SP has AcrPull on traindataacr1754421294
+- Confirm WEBSITE_RUN_FROM_PACKAGE is not set (containerized app)
+- Confirm FUNCTIONS_WORKER_RUNTIME=python and FUNCTIONS_EXTENSION_VERSION=~4 exist
+
+Rollback plan
+- Keep previous image tag (e.g., last successful $(Build.BuildId))
+- To rollback: redeploy previous tag to Function App container config and restart
+
+### 5.1 Create Environments
 1. Navigate to **Pipelines > Environments**
 2. Create the following environments:
    - `infrastructure` (for Terraform deployments)
    - `staging` (for staging Function App deployments)  
    - `production` (for production Function App deployments)
 
-#### 5.2 Environment Approvals and Gates
+### 5.2 Environment Approvals and Gates
 **Staging Environment:**
 - No approval required (automatic deployment)
 - Basic health checks after deployment
@@ -1611,12 +1743,12 @@ resource "azurerm_consumption_budget_resource_group" "main" {
   https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.OperationalInsights/workspaces/law-irail-dev-i6lr9a/overview
 
 - Storage Account (stiraildevi6lr9a):
-  https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.Storage/storageAccounts/stiraildevi6lr9a/overview
-
+- Log Analytics Workspace (law-irail-dev-i6lr9a):ons/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.Storage/storageAccounts/stiraildevi6lr9a/overview
+  https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.OperationalInsights/workspaces/law-irail-dev-i6lr9a/overview
 - Key Vault (kv-irail-dev-i6lr9a):
-  https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.KeyVault/vaults/kv-irail-dev-i6lr9a/overview
-
+- Storage Account (stiraildevi6lr9a):e/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.KeyVault/vaults/kv-irail-dev-i6lr9a/overview
+  https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.Storage/storageAccounts/stiraildevi6lr9a/overview
 - Container Registry (traindataacr1754421294) [Resource Group: traindata-app-rg]:
-  - Portal: https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/traindata-app-rg/providers/Microsoft.ContainerRegistry/registries/traindataacr1754421294/overview
-  - Login server: https://traindataacr1754421294.azurecr.io
+- Key Vault (kv-irail-dev-i6lr9a):om/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/traindata-app-rg/providers/Microsoft.ContainerRegistry/registries/traindataacr1754421294/overview
+  https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.KeyVault/vaults/kv-irail-dev-i6lr9a/overview
   - Note: If you see "Resource not found" or lack access, ensure you are on the correct subscription and have at least Reader (portal) and AcrPull (pull) roles on the resource or RG.
