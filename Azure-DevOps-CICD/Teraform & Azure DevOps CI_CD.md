@@ -4,8 +4,8 @@ This document provides a comprehensive guide for deploying Azure infrastructure 
 
 ## GitHub Repository
 
-GitHub repository: https://github.com/subllings/azure-1-week-AzureFunction-SQLDatabase-PowerBi
-Readme: https://github.com/subllings/azure-1-week-AzureFunction-SQLDatabase-PowerBi/blob/main/README.md  
+- GitHub repository: https://github.com/subllings/azure-1-week-AzureFunction-SQLDatabase-PowerBi
+- Readme: https://github.com/subllings/azure-1-week-AzureFunction-SQLDatabase-PowerBi/blob/main/README.md
 
 
 ## Document Structure
