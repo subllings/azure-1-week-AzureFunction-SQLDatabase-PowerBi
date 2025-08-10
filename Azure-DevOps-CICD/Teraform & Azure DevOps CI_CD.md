@@ -33,9 +33,12 @@ Azure-DevOps-CICD/
 - **Timeout**: 5 minutes (Y1 limit)
 - **Subscription**: Azure for Students
 
-### Data Factory
-- Using existing factory `df-irail-data-pobm4m` with a 5-minute collection trigger.
-- No new Terraform-managed Data Factory is used in this environment.
+### Data Factory (ADF2 - Terraform-managed)
+- Using Terraform-managed factory `df-irail-data-v2-<suffix>` with a 5-minute collection trigger.
+- Get the exact name from Terraform output `data_factory_info.name`.
+- Direct links (replace <suffix> with your actual suffix):
+  - ADF Studio: https://adf.azure.com/en/home?factory=df-irail-data-v2-<suffix>&resourceGroup=rg-irail-dev-i6lr9a
+  - Monitor: https://adf.azure.com/en/monitoring/pipelineruns?factory=df-irail-data-v2-<suffix>&resourceGroup=rg-irail-dev-i6lr9a
 
 ### Production Environment (Future)
 - Purpose: Live production workload
@@ -65,7 +68,7 @@ Resource Group: rg-irail-dev-i6lr9a
 SQL Server: sql-irail-dev-i6lr9a
 Storage Account: stiraildevi6lr9a
 Key Vault: kv-irail-dev-i6lr9a
-Data Factory: df-irail-data-pobm4m
+Data Factory v2: df-irail-data-v2-<suffix>
 URL: https://func-irail-dev-i6lr9a.azurewebsites.net
 
 # Future environments:
@@ -122,38 +125,6 @@ Alternatives:
 
 Note: Power BI should target `/api/powerbi` (canonical). The legacy `/api/powerbi-data` remains available for backward compatibility.
 
-## Complete Setup Instructions
-
-### Prerequisites
-- Azure DevOps organization with project creation permissions
-- Azure subscription with Contributor role
-- Azure Container Registry (ACR) access
-- GitHub repository access (if using GitHub integration)
-- Azure CLI installed for local testing
-
-### 1. Create Azure DevOps Project
-1. Navigate to [Azure DevOps](https://dev.azure.com)
-2. Create new project: `irail-functions-cicd`
-3. Choose Git version control
-4. Set project visibility (Private recommended)
-5. Connect your GitHub repository or import code
-
-#### Repository Connection Options
-
-You have two main approaches for connecting your GitHub repository to Azure DevOps:
-
-**Option 1: Import Repository (Recommended for Learning)**
-
-No, you don't need to copy the whole project manually. You can import your existing GitHub repository directly:
-
-1. In your Azure DevOps project, go to **Repos**
-2. Click **Import a repository**
-3. Choose **GitHub** as source
-4. Authenticate with GitHub
-5. Select your repository: `subllings/azure-1-week-AzureFunction-SQLDatabase-PowerBi`
-6. This creates a synchronized copy in Azure DevOps
-
-Benefits:
 ## Complete Setup Instructions
 
 ### Prerequisites
@@ -231,7 +202,7 @@ Azure Resources (Y1 Plan - France Central)
 ├── Resource Group: rg-irail-dev-i6lr9a
 ├── Function App: func-irail-dev-i6lr9a (Y1 Consumption Plan)
 ├── SQL Server: sql-irail-dev-i6lr9a + sqldb-irail-dev
-├── Data Factory: df-irail-data-pobm4m (Auto data collection)
+├── Data Factory v2: df-irail-data-v2-<suffix> (Terraform-managed, auto data collection)
 ├── Storage Account: stiraildevi6lr9a
 ├── Key Vault: kv-irail-dev-i6lr9a  
 ├── Application Insights: ai-irail-dev-i6lr9a
@@ -406,7 +377,7 @@ curl "https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=peak
 - **Function App**: `func-irail-dev-i6lr9a` - Running
 - **Resource Group**: `rg-irail-dev-i6lr9a` - Active  
 - **SQL Database**: `sqldb-irail-dev` - Online
-- **Data Factory**: `df-irail-data-pobm4m` - Pipelines Scheduled
+- **Data Factory v2**: `<from terraform output data_factory_info.name>` - Pipelines Scheduled
 - **Application Insights**: Monitoring Active
 - **Location**: France Central
 - **Plan**: Y1 Consumption (Cost-Optimized)
@@ -614,7 +585,7 @@ All scripts include:
 
 ### Manual Infrastructure Deployment
 
-#### Deploy ONLY Staging (Recommended to start)
+#### Deploy ONLY Staging (Recommended)
 
 **Option 1: Automated script (Simpler)**
 ```bash
@@ -817,7 +788,7 @@ resource "azurerm_mssql_firewall_rule" "azure_services" {
 # Container Registry (shared across environments)
 data "azurerm_container_registry" "main" {
   name                = "traindataacr1754421294"
-  resource_group_name = "rg-irail-dev-i6lr9a"
+  resource_group_name = "traindata-app-rg" // corrected RG
 }
 
 # Azure Function App
@@ -1415,7 +1386,7 @@ terraform force-unlock [LOCK_ID] -force
 3. **Function App Deployment Issues**
    - Check App Service Plan capacity
    - Verify container registry credentials
-   - Review Application Insights for errors
+#    - Review Application Insights for errors
 
 #### Infrastructure Validation Commands
 ```bash
@@ -1599,3 +1570,61 @@ resource "azurerm_consumption_budget_resource_group" "main" {
     cwd: '$(Build.SourcesDirectory)'
 ```
 
+## Useful links (Terraform deployment)
+
+- Subscription (Azure for Students):
+  https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/overview
+
+- Resource Group (rg-irail-dev-i6lr9a):
+  https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/overview
+
+- Function App (func-irail-dev-i6lr9a):
+  - Portal: https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.Web/sites/func-irail-dev-i6lr9a/overview
+  - Public URL: https://func-irail-dev-i6lr9a.azurewebsites.net
+  - Quick endpoints:
+    - Health: https://func-irail-dev-i6lr9a.azurewebsites.net/api/health
+    - Stations: https://func-irail-dev-i6lr9a.azurewebsites.net/api/stations
+    - Liveboard: https://func-irail-dev-i6lr9a.azurewebsites.net/api/liveboard?station=bruxelles
+    - Analytics: https://func-irail-dev-i6lr9a.azurewebsites.net/api/analytics
+    - Collect Data: https://func-irail-dev-i6lr9a.azurewebsites.net/api/collect-data
+  - Power BI example links (with parameters):
+    - Departures: https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=departures
+    - Stations: https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=stations
+    - Delays: https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=delays
+    - Peak hours: https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=peak_hours
+    - Vehicles: https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=vehicles
+    - Connections: https://func-irail-dev-i6lr9a.azurewebsites.net/api/powerbi?data_type=connections
+
+- Azure Data Factory v2 (Terraform-managed):
+  - Get the exact factory name from Terraform:
+    ```bash
+    cd infrastructure
+    terraform output -json | jq -r '.data_factory_info.value.name'
+    ```
+  - Replace <ADF2_NAME> below with the real name:
+    - ADF Studio: https://adf.azure.com/en/home?factory=<ADF2_NAME>&resourceGroup=rg-irail-dev-i6lr9a
+    - Monitor (Studio): https://adf.azure.com/en/monitoring/pipelineruns?factory=<ADF2_NAME>&resourceGroup=rg-irail-dev-i6lr9a
+    - Portal (Overview): https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.DataFactory/factories/<ADF2_NAME>/overview
+
+- SQL Server and Database:
+  - SQL Server (sql-irail-dev-i6lr9a):
+    https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.Sql/servers/sql-irail-dev-i6lr9a/overview
+  - Database (sqldb-irail-dev):
+    https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.Sql/servers/sql-irail-dev-i6lr9a/databases/sqldb-irail-dev/overview
+
+- Application Insights (ai-irail-dev-i6lr9a):
+  https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.Insights/components/ai-irail-dev-i6lr9a/overview
+
+- Log Analytics Workspace (law-irail-dev-i6lr9a):
+  https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.OperationalInsights/workspaces/law-irail-dev-i6lr9a/overview
+
+- Storage Account (stiraildevi6lr9a):
+  https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.Storage/storageAccounts/stiraildevi6lr9a/overview
+
+- Key Vault (kv-irail-dev-i6lr9a):
+  https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/rg-irail-dev-i6lr9a/providers/Microsoft.KeyVault/vaults/kv-irail-dev-i6lr9a/overview
+
+- Container Registry (traindataacr1754421294) [Resource Group: traindata-app-rg]:
+  - Portal: https://portal.azure.com/#@/resource/subscriptions/b63db937-8e75-4757-aa10-4571a475c185/resourceGroups/traindata-app-rg/providers/Microsoft.ContainerRegistry/registries/traindataacr1754421294/overview
+  - Login server: https://traindataacr1754421294.azurecr.io
+  - Note: If you see "Resource not found" or lack access, ensure you are on the correct subscription and have at least Reader (portal) and AcrPull (pull) roles on the resource or RG.

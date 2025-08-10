@@ -24,9 +24,9 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration - Staging Environment
-RESOURCE_GROUP="rg-irail-dev-b7m2sk"
-FUNCTION_APP_NAME="func-irail-dev-b7m2sk"
-FUNCTION_APP_URL="https://func-irail-dev-b7m2sk.azurewebsites.net"
+RESOURCE_GROUP="rg-irail-dev-i6lr9a"
+FUNCTION_APP_NAME="func-irail-dev-i6lr9a"
+FUNCTION_APP_URL="https://func-irail-dev-i6lr9a.azurewebsites.net"
 SOURCE_DIR="azure_function"
 BUILD_DIR="azure_function"
 
