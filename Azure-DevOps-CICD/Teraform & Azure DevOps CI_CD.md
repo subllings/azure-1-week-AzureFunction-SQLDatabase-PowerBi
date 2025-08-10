@@ -1544,8 +1544,8 @@ https://aka.ms/azpipelines-parallelism-request
 
 **Step 2**: Configure the New Pool
 - **Pool type**: `Self-hosted`
-- **Name**: `iRail-Functions-Pool` (or your preferred name)
-- **Description**: `Dedicated pool for iRail Functions CI/CD`
+- **Name**: `Default` (using the existing default pool)
+- **Description**: `Using the default pool for iRail Functions CI/CD`
 - **Grant access permission**: Check this box
 - **Auto-provision**: Check this for automatic project access
 
@@ -1569,7 +1569,7 @@ https://aka.ms/azpipelines-parallelism-request
 
 ### 4.3 Agent Setup Process
 
-**Step 1**: Navigate to **Organization Settings → Agent pools → iRail-Functions-Pool → New agent**
+**Step 1**: Navigate to **Organization Settings → Agent pools → Default → New agent**
 
 ![picture 34](../images/f49e9cfaed52b7911d811cc31b5b4fa48a348a8a183a1a6a075c65fab022ca00.png)  
 
@@ -1673,7 +1673,6 @@ variables:
   tag: '$(Build.BuildId)'
 ```
 
-## Step 5: Complete Pipeline Configuration  
 
 
 ## Step 5: Complete Pipeline Configuration
@@ -1690,6 +1689,17 @@ variables:
    - **Subscription**: `Azure for Students` (b63db937-8e75-4757-aa10-4571a475c185)
    - **Resource group**: `rg-irail-dev-i6lr9a` (or subscription scope)
    - **Grant access**: Enable "Allow all pipelines to use this connection"
+
+![picture 53](../images/bcaad2ddbc35372c8d507e9dbd41d95082cb4c2e35627cca624328be9248d1f7.png)  
+
+![picture 54](../images/bdaa83a819048d6d49cf8e47205381ec4d01b2b66ea1add05cbd01989c069c55.png)  
+
+![picture 55](../images/8ee9b0986d4b823b48e2ec399e298b9a7e0a995a8708b922e4fb1a38f40478e4.png)  
+
+![picture 56](../images/fe6b142b0b0e884968060f434b723c1a7221813c2f8201c8534b9225ce051aa1.png)  
+
+![picture 57](../images/1610b362a455e7b6aa255c898d2d8765fe680ecc43f939b3bc4484217dbfef93.png)  
+
 
 ### 5.2 Set Up Variable Groups
 
