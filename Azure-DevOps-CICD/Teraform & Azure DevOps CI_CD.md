@@ -1463,13 +1463,6 @@ Create a new project
 
 ![picture 10](../images/18d608155b9abdac3a3b7f55a43b499538fa32d975f15b4f2da6fcab8270b837.png)  
 
-![picture 11](../images/1f4eb9ff6334d8a0955d80fed4fcb6eb26bc40b11fece128a6e2d904e9178528.png)  
-
-![picture 12](../images/bc59bb6abb63ec7b97484922923fc56ee41e854f026ef0a09fff33cb0e9cef50.png)  
-
-
-
-
 
 
 ## Step 2: Set Up Container Registry Service Connection
@@ -1487,7 +1480,7 @@ The pipeline needs to:
 
 ![picture 21](../images/2d1a20967ecc7ec93f8659fcc00be687f3ca00f049b76cf207632abd1e93d6d7.png)  
 
-![picture 22](../images/dbba7c1c4d63b45574fc154c1f1d3fad760db32eca282942ec8700b6e1b3f1f7.png)  
+
 
 ### 2.2 Create Docker Registry Service Connection
 
@@ -1543,11 +1536,56 @@ https://aka.ms/azpipelines-parallelism-request
 - **Network connectivity** required
 - **Local resources** used (CPU, memory, disk)
 
-### 4.2 Agent Setup Process
+### 4.2 Creating a Custom Agent Pool
 
-**Step 1**: Navigate to **Project Settings → Agent pools → Default → New agent**
+**Step 1**: Navigate to **Organization Settings → Agent pools**
+- Go to `https://dev.azure.com/bouman9YvesSchillings/_settings/agentpools`
+- Click **"Add pool"**
+
+**Step 2**: Configure the New Pool
+- **Pool type**: `Self-hosted`
+- **Name**: `iRail-Functions-Pool` (or your preferred name)
+- **Description**: `Dedicated pool for iRail Functions CI/CD`
+- **Grant access permission**: Check this box
+- **Auto-provision**: Check this for automatic project access
+
+**Step 3**: Set Pool Security
+- Navigate to your new pool → **Security** tab
+- Add your project team with appropriate permissions:
+  - **Reader**: View pool and agents
+  - **User**: Queue builds and view pool
+  - **Administrator**: Manage agents and pool settings
+
+**Step 4**: Update Project Permissions (if needed)
+- Go to **Project Settings → Agent pools**
+- Ensure your new pool is visible and accessible
+- Grant **User** permissions to your project's build service
+
+**Why Create a Custom Pool?**
+- **Better Organization**: Dedicated resources for your project
+- **Security Isolation**: Separate from other projects
+- **Resource Management**: Control which agents handle your workloads
+- **Future Scaling**: Easy to add more agents as needed
+
+### 4.3 Agent Setup Process
+
+**Step 1**: Navigate to **Organization Settings → Agent pools → iRail-Functions-Pool → New agent**
+
+![picture 34](../images/f49e9cfaed52b7911d811cc31b5b4fa48a348a8a183a1a6a075c65fab022ca00.png)  
+
+![picture 40](../images/4fc420e5251f42e7fa8e0c2a6a128723eb87c2a4af6f3802adeaac46566a3f17.png)  
+
+![picture 43](../images/61dbcaee006ea95766271729ac434009b08e375035657760b91312d84dbb291a.png)  
+
+![picture 46](../images/b63203052ff37914e4ee397892be50aadcadfad832a5339f811b33800d996af6.png)  
+
+![picture 47](../images/e9e02d607b6418fe2f7835f6107351fa7ce6bef3da473648125d9be0915546c8.png)  
+
 
 **Step 2**: Download the Windows agent package
+
+![picture 48](../images/e8fa3c40dbcf8f4a83e3ef5be09669018936b30ed603865d452e483a7a3d6333.png)  
+
 
 **Step 3**: Extract and configure the agent
 
@@ -1556,23 +1594,54 @@ https://aka.ms/azpipelines-parallelism-request
 # Navigate to the directory
 cd C:\azagent
 
-# Configure the agent
+# Configure the agent (this will prompt for details)
 .\config.cmd
 ```
 
-**Configuration Prompts:**
+**Step 4**: Create Personal Access Token (PAT)
+1. **Navigate to PAT settings**:
+   - Go to `https://dev.azure.com/bouman9YvesSchillings`
+   - Click your **profile picture** (top-right corner)
+   - Select **"Personal access tokens"** from dropdown menu
+   - OR go directly to: `https://dev.azure.com/bouman9YvesSchillings/_usersSettings/tokens`
+
+2. **Create new token**:
+   - Click **"+ New Token"**
+   - **Name**: `iRail-Agent-Token`
+   - **Expiration**: Custom defined (set appropriate duration)
+   - **Scopes**: Select **"Agent Pools (read, manage)"** scope
+   - Click **"Create"**
+
+
+
+3. **Copy the token** immediately (you won't see it again!)
+   - Click the **"Copy to clipboard"** button next to the token
+   - **IMPORTANT**: Save it temporarily in Notepad - you'll need it in the next step!
+
+4. Use this token during agent configuration
+
+**Step 5**: Configure the agent with your token
+```powershell
+# Navigate to agent directory
+cd C:\azagent
+
+# Run configuration (this will prompt for the token)
+.\config.cmd
+```
+![picture 49](../images/6054fdaa53630667ba14d7d6f7b0f41baaa9d0039b2408b8a04e54312c2658cd.png)  
+
+![picture 50](../images/88c2e795ef69ed33bd775800da41a1a3fe9fe8b873496698713faedb6f3afa89.png)  
+
+
+**When prompted during `.\config.cmd`**:
 - **Server URL**: `https://dev.azure.com/bouman9YvesSchillings`
-- **Authentication**: `PAT` (Personal Access Token)
-- **Agent pool**: `Default`
-- **Agent name**: `MyDev-Agent`
+- **Authentication type**: `PAT` (Personal Access Token)
+- **Personal access token**: **PASTE YOUR COPIED TOKEN HERE** 
+- **Agent pool**: `iRail-Functions-Pool`
+- **Agent name**: `iRail-Dev-Agent`
 - **Work folder**: `_work` (default)
 
-**Step 4**: Create Personal Access Token (PAT)
-1. Go to Azure DevOps → User Settings → Personal Access Tokens
-2. Create new token with **Agent Pools (read, manage)** scope
-3. Copy the token for agent configuration
-
-**Step 5**: Start the agent
+**Step 6**: Start the agent
 ```powershell
 # Start the agent interactively (for testing)
 .\run.cmd
@@ -1580,15 +1649,20 @@ cd C:\azagent
 # Or install as Windows service (for production)
 .\config.cmd --unattend --runAsService
 ```
+![picture 52](../images/64da64b06c2fc421417c8f644a3f01159563ba055afe425727c4caf0185cc29e.png)  
 
-### 4.3 Pipeline Configuration for Self-Hosted Agent
+
+![picture 51](../images/f61d594b1d1f15f003bbc8517e2fb3b108ada85b8f1f8215fb3dcdec6abce5d3.png)  
+
+
+### 4.4 Pipeline Configuration for Self-Hosted Agent
 
 Update your pipeline YAML:
 
 ```yaml
 # Change from Microsoft-hosted to self-hosted
 pool:
-  name: 'Default'  # Your agent pool name
+  name: 'iRail-Functions-Pool'  # Your custom agent pool name
   # Remove: vmImage: 'ubuntu-latest'
 
 # Rest of your pipeline remains the same
@@ -1671,7 +1745,7 @@ stages:
   - job: Build
     displayName: 'Build Docker Image'
     pool:
-      name: 'Default'  # Self-hosted agent pool
+      name: 'iRail-Functions-Pool'  # Self-hosted agent pool
     steps:
     - checkout: self
     
@@ -1694,7 +1768,7 @@ stages:
   - deployment: DeployToFunction
     displayName: 'Deploy to Azure Function App'
     pool:
-      name: 'Default'  # Self-hosted agent pool
+      name: 'iRail-Functions-Pool'  # Self-hosted agent pool
     environment: 'staging'
     strategy:
       runOnce:
