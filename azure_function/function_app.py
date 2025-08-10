@@ -799,9 +799,12 @@ def health_check(req: func.HttpRequest) -> func.HttpResponse:
     return func.HttpResponse(
         json.dumps({
             "status": "healthy", 
-            "timestamp_utc": utc_now.isoformat(),
-            "timestamp_brussels": brussels_time.isoformat(),
-            "timezone_note": "Brussels is UTC+2 (summer time)"
+            "demo_status": "Code changed and deployed automatically!",
+            "demo_timestamp": brussels_time.isoformat(),
+            "deployment_method": "Azure DevOps Self-Hosted Agent",
+            "container_registry": "Azure Container Registry",
+            "audience": "Hi there ! ",
+            "build_time": "Under 3 minutes from code to production"
         }),
         status_code=200,
         mimetype="application/json"
