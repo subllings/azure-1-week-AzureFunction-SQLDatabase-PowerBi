@@ -1701,6 +1701,7 @@ variables:
 ![picture 57](../images/1610b362a455e7b6aa255c898d2d8765fe680ecc43f939b3bc4484217dbfef93.png)  
 
 
+
 ### 5.2 Set Up Variable Groups
 
 Variable groups centralize configuration and secrets for your pipeline.
