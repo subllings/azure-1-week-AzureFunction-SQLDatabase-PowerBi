@@ -10,7 +10,7 @@ resources:
 
 variables:
   # Container registry service connection established during pipeline creation
-  dockerRegistryServiceConnection: '9a8a8e2f-0104-4a18-bfcc-497f0b70a18c'
+  dockerRegistryServiceConnection: 'criraildevi6lr9a-connection'
   imageRepository: 'subllingsazureweekazurefunctionsqldatabasepowerbi'
   containerRegistry: 'criraildevi6lr9a.azurecr.io'
   dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
