@@ -43,7 +43,7 @@ stages:
   - job: CodeQuality
     displayName: 'Code Quality and Security Checks'
     pool:
-      vmImage: 'ubuntu-latest'
+      name: 'Default'
     
     steps:
     - checkout: self
