@@ -4,10 +4,10 @@ This document provides a comprehensive guide for deploying Azure infrastructure 
 
 ## Document Structure
 
-**Section I: Terraform Infrastructure Setup** - Deploy the foundational Azure resources
-**Section II: Power BI Dashboard Configuration** - Set up data visualization and analytics
-**Section III: GitHub Actions CI/CD** - Alternative CI/CD solution using GitHub Actions
-**Section IV: Azure DevOps CI/CD Configuration** - Enterprise CI/CD using Azure DevOps
+- **Section I: Terraform Infrastructure Setup** - Deploy the foundational Azure resources
+- **Section II: Power BI Dashboard Configuration** - Set up data visualization and analytics
+- **Section III: GitHub Actions CI/CD** - Alternative CI/CD solution using GitHub Actions
+- **Section IV: Azure DevOps CI/CD Configuration** - Enterprise CI/CD using Azure - DevOps
 
 ## Recommended Workflow
 
@@ -45,6 +45,31 @@ Configure Power BI dashboards to visualize your train data:
 ## Complete Infrastructure Overview
 
 This section contains the complete Terraform infrastructure for the iRail Train Data project, including Azure Functions, SQL Server, Data Factory, and all supporting resources.
+
+## High-Level Architecture
+
+![picture 33](../images/6881683cd58c81ceb6add74865c880de41cd45aaecf612b613bcf7817a7c467a.png)  
+
+
+The architecture consists of several key components working together:
+
+### Data Flow
+1. **iRail API** → Provides real-time Belgian train data
+2. **Azure Data Factory** → Scheduled data collection every 5 minutes
+3. **Azure Functions** → REST API endpoints for data access and Power BI integration
+4. **Azure SQL Database** → Structured data storage with tables for Stations, Vehicles, Departures, and Connections
+5. **Azure Key Vault** → Secure storage of connection strings and API keys
+6. **Power BI Service** → Interactive dashboards and analytics
+
+### Security & Identity
+- **Managed Identity** for secure authentication between services
+- **Azure Key Vault** for centralized secret management
+- **RBAC** controls for fine-grained access permissions
+
+### Monitoring & Operations  
+- **Application Insights** for telemetry and performance monitoring
+- **Log Analytics** for centralized logging
+- **Automated scaling** with Y1 Consumption Plan
 
 ## Current Infrastructure Status
 - **Infrastructure Deployed**: Y1 Consumption Plan in France Central
@@ -196,9 +221,9 @@ All resources follow the pattern: `{service}-irail-{environment}-{random-suffix}
 
 | Plan Type | Monthly Cost | Cold Starts | Scaling | Use Case | Availability |
 |-----------|-------------|-------------|----------|----------|-------------|
-| **Y1 (Consumption)** | ~&euro;0-5 | Yes (slower) | Automatic | Development/Testing | ✅ Azure for Students |
-| **FC1 (Flex Consumption)** | ~&euro;20-50 | Reduced | Faster | Production Serverless | ❌ Not in free tier |
-| **Premium (EP1+)** | ~&euro;150+ | None (Always On) | Instant | Enterprise Production | ❌ Not in free tier |
+| **Y1 (Consumption)** | ~&euro;0-5 | Yes (slower) | Automatic | Development/Testing |  Azure for Students |
+| **FC1 (Flex Consumption)** | ~&euro;20-50 | Reduced | Faster | Production Serverless |  Not in free tier |
+| **Premium (EP1+)** | ~&euro;150+ | None (Always On) | Instant | Enterprise Production |  Not in free tier |
 
 **Plan Details:**
 
@@ -752,9 +777,6 @@ az storage container create \
 - **Section III**: Set up GitHub Actions for CI/CD (alternative approach)
 - **Section IV**: Set up Azure DevOps for enterprise CI/CD pipelines
 
----
-
-# Section II: Power BI Dashboard Configuration
 
 ### About the Y1 (Consumption) Plan
 
