@@ -1725,7 +1725,7 @@ CONTAINER_IMAGE: traindata-function
 CONTAINER_TAG: latest
 ENVIRONMENT_NAME: dev
 ```
-
+    
 ### 5.3 Pipeline YAML Configuration
 
 **Complete pipeline for self-hosted agent:**
