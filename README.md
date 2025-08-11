@@ -1263,9 +1263,16 @@ https://irail-functions-simple.azurewebsites.net/api/powerbi?data_type=connectio
 
 ![picture 12](images/63f7fb8fab04b02609e8967ff496bdc42ccba7e9f58855b3bfd4fc55bc1299bd.png)  
 
+![picture 10](images/da3267f01ca51cdc26512f0d335dd374d0d6f42bd4fe04fcc1a5895f3c3ba1be.png)  
+
+![picture 12](images/7b72471d28bfd7a0503f1f0aae89df58448096dba81cf106cffd6bc52991e7f7.png)  
+
 ### Power BI Dashboard **Refresh Rate**
 
 ![picture 18](images/36661431e932c3811dfce989d44b56502546adc28e53de69b0efe363a3aba5fc.png)  
+
+
+
 
 **Power BI License Requirements for Data Refresh**
 
@@ -1395,7 +1402,8 @@ Power BI Components:
 
 URL : https://app.powerbi.com/groups/me/reports/56acc5ad-14e2-4770-bc5a-71bfc5605264/42dae40bc490597449c3?experience=power-bi
 
-![picture 19](images/0b6d544ab19b01741cec0883935a8086dbd30a49d4aff54ae32f46cdcd7fd7a1.png)  
+ ![picture 13](images/4c905a11e047f289533de941d032122ea4e67f61ff910d1122200a1762db09fa.png)  
+
 
 
 ## **5. Route Explorer**

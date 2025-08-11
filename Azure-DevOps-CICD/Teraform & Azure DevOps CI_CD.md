@@ -2,6 +2,12 @@
 
 This document provides a comprehensive guide for deploying Azure infrastructure using Terraform, followed by setting up Power BI dashboards, GitHub Actions, and Azure DevOps CI/CD pipelines.
 
+## GitHub Repository
+
+- GitHub repository: https://github.com/subllings/azure-1-week-AzureFunction-SQLDatabase-PowerBi
+- Readme: https://github.com/subllings/azure-1-week-AzureFunction-SQLDatabase-PowerBi/blob/main/README.md
+
+
 ## Document Structure
 
 - **Section I: Terraform Infrastructure Setup** - Deploy the foundational Azure resources
